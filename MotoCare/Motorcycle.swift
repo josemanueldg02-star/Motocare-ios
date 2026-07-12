@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+struct Motorcycle {
+    let make: String
+    let model: String
+    var mileage: Int
+}

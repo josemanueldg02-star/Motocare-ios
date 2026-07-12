@@ -8,11 +8,128 @@
 import SwiftUI
 
 struct RegisterView: View {
+    // Recibe el "mando"
+    @Binding var currentScreen: AppState
+    
+    @State private var name = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var confirmPassword = ""
+    
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var showSuccess = false
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        VStack {
+            Text("Crear Cuenta")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .padding(.top, 40)
+                .padding(.bottom, 20)
+            
+            VStack(spacing: 15) {
+                CustomTextField(icon: "person.fill", placeholder: "Nombre completo", text: $name)
+                
+                CustomTextField(icon: "envelope.fill", placeholder: "Correo electrónico", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                
+                CustomSecureField(icon: "lock.fill", placeholder: "Contraseña", text: $password)
+                CustomSecureField(icon: "lock.fill", placeholder: "Confirmar Contraseña", text: $confirmPassword)
+            }
+            .padding(.horizontal, 20)
+            
+            Button(action: {
+                validarRegistro()
+            }) {
+                Text("Registrarse")
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .alert("Error", isPresented: $showError) {
+                Button("Entendido", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .alert("¡Registro Exitoso!", isPresented: $showSuccess) {
+                Button("Empezar") {
+                    currentScreen = .dashboard // ¡Cambia al panel principal!
+                }
+            } message: {
+                Text("Tu cuenta ha sido creada correctamente.")
+            }
+            
+            Spacer()
+        }
+    }
+    
+    func validarRegistro() {
+        if name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty {
+            errorMessage = "Por favor, rellena todos los campos."
+            showError = true
+            return
+        }
+        if password.count < 6 {
+            errorMessage = "La contraseña debe tener al menos 6 caracteres."
+            showError = true
+            return
+        }
+        if password != confirmPassword {
+            errorMessage = "Las contraseñas no coinciden."
+            showError = true
+            return
+        }
+        showSuccess = true
+    }
+}
+
+// Subvistas para los campos de texto
+struct CustomTextField: View {
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.gray)
+                .frame(width: 20)
+            TextField(placeholder, text: $text)
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(10)
+    }
+}
+
+struct CustomSecureField: View {
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.gray)
+                .frame(width: 20)
+            SecureField(placeholder, text: $text)
+                .textContentType(.password)
+                .textInputAutocapitalization(.never)
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(10)
     }
 }
 
 #Preview {
-    RegisterView()
+    RegisterView(currentScreen: .constant(.login))
 }
