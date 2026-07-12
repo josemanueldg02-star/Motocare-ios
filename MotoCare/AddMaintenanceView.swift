@@ -10,14 +10,15 @@ import SwiftUI
 struct AddMaintenanceView: View {
     @Environment(\.dismiss) var dismiss
     
-    // Variables temporales para guardar lo que escribe el usuario
+    @EnvironmentObject var viewModel: GarageViewModel
+    
     @State private var maintenanceType = "Cambio de Aceite"
     @State private var date = Date()
     @State private var mileage = ""
     @State private var cost = ""
     @State private var notes = ""
     
-    let maintenanceOptions = ["Cambio de Aceite", "Neumáticos", "Frenos", "Kit de Arrastre", "Revisiones", "Otros"]
+    let maintenanceOptions = ["Cambio de Aceite", "Neumáticos", "Frenos", "Kit de Arrastre", "Revisión General", "Otro"]
     
     var body: some View {
         NavigationStack {
@@ -34,7 +35,7 @@ struct AddMaintenanceView: View {
                 
                 Section(header: Text("Datos adicionales")) {
                     TextField("Kilometraje actual", text: $mileage)
-                        .keyboardType(.numberPad) // Para forzar el teclado numérico.
+                        .keyboardType(.numberPad)
                     
                     TextField("Coste (€)", text: $cost)
                         .keyboardType(.decimalPad)
@@ -48,7 +49,6 @@ struct AddMaintenanceView: View {
             .navigationTitle("Añadir Registro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Colocamos botones en la barra superior
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancelar") {
                         dismiss()
@@ -57,11 +57,17 @@ struct AddMaintenanceView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Guardar") {
-                        print("Guardado mantenimiento: \(maintenanceType)")
-                        // Conectar a lista "Mi Garaje".
+                        viewModel.addRecord(
+                            type: maintenanceType,
+                            date: date,
+                            mileage: mileage,
+                            cost: cost,
+                            notes: notes
+                        )
                         dismiss()
                     }
                     .fontWeight(.bold)
+                    .disabled(mileage.isEmpty || cost.isEmpty)
                 }
             }
         }
@@ -70,4 +76,5 @@ struct AddMaintenanceView: View {
 
 #Preview {
     AddMaintenanceView()
+        .environmentObject(GarageViewModel()) 
 }

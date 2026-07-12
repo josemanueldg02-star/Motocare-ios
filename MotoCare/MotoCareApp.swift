@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct MotoCareApp: App {
+    
+    @StateObject var globalViewModel = GarageViewModel()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(globalViewModel)
         }
     }
 }

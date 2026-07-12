@@ -8,32 +8,34 @@
 import SwiftUI
 
 struct MainTabView: View {
+    
+    @EnvironmentObject var viewModel: GarageViewModel
+    
     var body: some View {
         TabView {
-            // Pestaña 1: Dashboard.
+            
+            // Pestaña 1
             DashboardView()
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Inicio")
                 }
-            // Pestaña 2: Historial/Garaje (En construcción).
-            Text("Aquí irá la lista de mantenimiento de tu moto.")
-                .font(.headline)
-                .foregroundColor(.gray)
+            
+            // Pestaña 2
+            GarageView(viewModel: viewModel) 
                 .tabItem {
                     Image(systemName: "wrench.and.screwdriver.fill")
                     Text("Mi Garaje")
                 }
             
-            // Pestaña 3: Perfil (En construcción).
-            Text("Aquí irán los ajustes y datos del piloto")
+            // Pestaña 3 (En construcción)
+            Text("Aquí irán los ajustes y datos del piloto.")
                 .font(.headline)
                 .foregroundColor(.gray)
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("Perfil")
                 }
-            
         }
         .accentColor(.blue)
     }
@@ -41,4 +43,5 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(GarageViewModel()) // Necesario para la vista previa
 }
