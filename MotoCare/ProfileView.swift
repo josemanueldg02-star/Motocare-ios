@@ -2,11 +2,6 @@
 //  ProfileView.swift
 //  MotoCare
 //
-//  Antes esta pestaña era un simple Text placeholder. Ahora permite:
-//  - ver/editar los datos de la moto (fuente única de verdad),
-//  - activar/desactivar Face ID (solo si el dispositivo lo soporta),
-//  - cerrar sesión de verdad.
-//
 
 import SwiftUI
 
@@ -14,35 +9,36 @@ struct ProfileView: View {
     @Binding var currentScreen: AppState
     @EnvironmentObject var viewModel: GarageViewModel
 
-    @AppStorage("savedEmail") var savedEmail = ""
+    @AppStorage("currentUserEmail") var currentUserEmail = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
+
+    @State private var showEditBike = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Cuenta") {
-                    LabeledContent("Correo", value: savedEmail.isEmpty ? "—" : savedEmail)
+                    LabeledContent("Correo", value: currentUserEmail.isEmpty ? "—" : currentUserEmail)
                 }
 
                 Section("Mi moto") {
-                    TextField("Marca", text: $viewModel.motorcycle.make)
-                    TextField("Modelo", text: $viewModel.motorcycle.model)
-                    Stepper("Km: \(viewModel.motorcycle.mileage.formatted())",
-                            value: $viewModel.motorcycle.mileage,
-                            in: 0...1_000_000,
-                            step: 100)
-                    Stepper("Intervalo revisión: \(viewModel.motorcycle.serviceIntervalKm.formatted()) km",
-                            value: $viewModel.motorcycle.serviceIntervalKm,
-                            in: 1000...20000,
-                            step: 500)
+                    if let bike = viewModel.motorcycle {
+                        LabeledContent("Moto", value: "\(bike.make) \(bike.model)")
+                        LabeledContent("Kilometraje", value: "\(bike.mileage.formatted()) km")
+                        LabeledContent("Intervalo revisión", value: "\(bike.serviceIntervalKm.formatted()) km")
+                        Button("Editar moto") { showEditBike = true }
+                    } else {
+                        Button("Añadir moto") { showEditBike = true }
+                    }
                 }
 
                 Section("Resumen") {
                     LabeledContent("Gasto total",
                                    value: viewModel.totalSpent.formatted(.currency(code: "EUR")))
-                    LabeledContent("Próxima revisión",
-                                   value: "\(viewModel.nextServiceMileage.formatted()) km")
+                    if let next = viewModel.nextServiceMileage {
+                        LabeledContent("Próxima revisión", value: "\(next.formatted()) km")
+                    }
                 }
 
                 Section("Seguridad") {
@@ -64,12 +60,17 @@ struct ProfileView: View {
                 }
             }
             .navigationTitle("Perfil")
+            .sheet(isPresented: $showEditBike) {
+                AddBikeView(existing: viewModel.motorcycle)
+                    .environmentObject(viewModel)
+            }
         }
     }
 
     private func logout() {
         isLoggedIn = false
-        // No borramos las credenciales del Keychain: el usuario podrá volver a entrar.
+        currentUserEmail = ""
+        viewModel.switchToUser(email: nil) // descarga los datos del usuario en memoria
         withAnimation { currentScreen = .login }
     }
 }

@@ -8,9 +8,11 @@ import LocalAuthentication
 
 struct SplashView: View {
     @Binding var currentScreen: AppState
+    @EnvironmentObject var viewModel: GarageViewModel
 
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
+    @AppStorage("currentUserEmail") var currentUserEmail = ""
 
     @State private var size = 0.5
     @State private var opacity = 0.0
@@ -38,17 +40,20 @@ struct SplashView: View {
                 self.size = 1.0
                 self.opacity = 1.0
             }
-            // Espera de arranque sin bloquear el hilo con DispatchQueue.
             try? await Task.sleep(for: .seconds(2.5))
             checkLoginStatus()
         }
     }
 
     private func checkLoginStatus() {
-        guard isLoggedIn else {
+        // Solo hay sesión válida si además sabemos QUÉ usuario es.
+        guard isLoggedIn, !currentUserEmail.isEmpty else {
             withAnimation { currentScreen = .login }
             return
         }
+
+        viewModel.switchToUser(email: currentUserEmail) // carga los datos de ese usuario
+
         if useFaceID {
             authenticateWithFaceID()
         } else {
@@ -60,8 +65,6 @@ struct SplashView: View {
         let context = LAContext()
         var error: NSError?
 
-        // AGUJERO CORREGIDO: si no hay biometría, exigimos contraseña en vez de
-        // dejar pasar directo al dashboard.
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
             withAnimation { currentScreen = .login }
             return
@@ -78,4 +81,5 @@ struct SplashView: View {
 
 #Preview {
     SplashView(currentScreen: .constant(.splash))
+        .environmentObject(GarageViewModel())
 }

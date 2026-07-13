@@ -7,8 +7,9 @@ import SwiftUI
 
 struct RegisterView: View {
     @Binding var currentScreen: AppState
+    @EnvironmentObject var viewModel: GarageViewModel
 
-    @AppStorage("savedEmail") var savedEmail = ""
+    @AppStorage("currentUserEmail") var currentUserEmail = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
 
@@ -95,8 +96,15 @@ struct RegisterView: View {
     }
 
     private func validarRegistro() {
-        if name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty {
+        let cleanEmail = AuthService.normalize(email)
+
+        if name.isEmpty || cleanEmail.isEmpty || password.isEmpty || confirmPassword.isEmpty {
             errorMessage = "Por favor, rellena todos los campos."
+            showError = true
+            return
+        }
+        if !cleanEmail.contains("@") || !cleanEmail.contains(".") {
+            errorMessage = "Introduce un correo válido."
             showError = true
             return
         }
@@ -110,9 +118,16 @@ struct RegisterView: View {
             showError = true
             return
         }
+        // Clave del arreglo: no dejar registrar un correo que ya existe.
+        if AuthService.accountExists(email: cleanEmail) {
+            errorMessage = "Ya existe una cuenta con ese correo. Inicia sesión."
+            showError = true
+            return
+        }
 
-        savedEmail = email
-        AuthService.register(password: password) // hash + sal en Keychain
+        AuthService.register(email: cleanEmail, password: password)
+        currentUserEmail = cleanEmail
+        viewModel.switchToUser(email: cleanEmail) // usuario nuevo => garaje vacío, sin moto mock
         isLoggedIn = true
 
         if AuthService.biometricsAvailable() {
@@ -123,9 +138,14 @@ struct RegisterView: View {
     }
 
     private func simulateSocialLogin(provider: String) {
-        savedEmail = "usuario@\(provider.lowercased()).com"
-        AuthService.register(password: UUID().uuidString)
+        let socialEmail = "usuario@\(provider.lowercased()).com"
+        if !AuthService.accountExists(email: socialEmail) {
+            AuthService.register(email: socialEmail, password: UUID().uuidString)
+        }
+        currentUserEmail = AuthService.normalize(socialEmail)
+        viewModel.switchToUser(email: currentUserEmail)
         isLoggedIn = true
+
         if AuthService.biometricsAvailable() {
             showFaceIDPrompt = true
         } else {
@@ -174,4 +194,5 @@ struct CustomSecureField: View {
 
 #Preview {
     RegisterView(currentScreen: .constant(.login))
+        .environmentObject(GarageViewModel())
 }

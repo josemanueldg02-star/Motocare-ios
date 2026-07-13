@@ -8,10 +8,9 @@ import LocalAuthentication
 
 struct LoginView: View {
     @Binding var currentScreen: AppState
+    @EnvironmentObject var viewModel: GarageViewModel
 
-    // El email no es secreto (es un identificador), puede vivir en AppStorage.
-    // La contraseña YA NO se guarda aquí: la gestiona AuthService (Keychain + hash).
-    @AppStorage("savedEmail") var savedEmail = ""
+    @AppStorage("currentUserEmail") var currentUserEmail = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
 
@@ -60,9 +59,8 @@ struct LoginView: View {
                             .cornerRadius(12)
                     }
 
-                    // El botón Face ID solo aparece si HAY cuenta, el usuario lo activó
-                    // y el dispositivo lo soporta. (Antes bastaba con tener un email.)
-                    if AuthService.hasAccount() && useFaceID && AuthService.biometricsAvailable() {
+                    // Face ID reentra en la ÚLTIMA cuenta usada, si el usuario lo activó.
+                    if !currentUserEmail.isEmpty && useFaceID && AuthService.biometricsAvailable() {
                         Button(action: authenticateWithBiometrics) {
                             HStack {
                                 Image(systemName: "faceid")
@@ -106,7 +104,7 @@ struct LoginView: View {
                         .padding(.bottom, 20)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar) // antes .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .alert("Error de Inicio", isPresented: $showError) {
                 Button("Entendido", role: .cancel) { }
             } message: {
@@ -130,26 +128,31 @@ struct LoginView: View {
     // MARK: - Lógica
 
     private func loginWithEmail() {
-        guard !savedEmail.isEmpty,
-              emailInput == savedEmail,
-              AuthService.verify(password: passwordInput) else {
+        let email = AuthService.normalize(emailInput)
+
+        guard AuthService.verify(email: email, password: passwordInput) else {
             errorMessage = "Correo o contraseña incorrectos."
             showError = true
             return
         }
+
+        currentUserEmail = email
+        viewModel.switchToUser(email: email) // carga los datos de ESTE usuario
         isLoggedIn = true
         proceedAfterLogin()
     }
 
     private func simulateSocialLogin(provider: String) {
-        savedEmail = "usuario@\(provider.lowercased()).com"
-        // Registramos un secreto aleatorio para mantener la cuenta consistente.
-        AuthService.register(password: UUID().uuidString)
+        let socialEmail = "usuario@\(provider.lowercased()).com"
+        if !AuthService.accountExists(email: socialEmail) {
+            AuthService.register(email: socialEmail, password: UUID().uuidString)
+        }
+        currentUserEmail = AuthService.normalize(socialEmail)
+        viewModel.switchToUser(email: currentUserEmail)
         isLoggedIn = true
         proceedAfterLogin()
     }
 
-    /// Tras un login válido: ofrece activar Face ID solo si el dispositivo lo soporta.
     private func proceedAfterLogin() {
         if AuthService.biometricsAvailable() && !useFaceID {
             showFaceIDPrompt = true
@@ -172,6 +175,7 @@ struct LoginView: View {
                                localizedReason: "Inicia sesión de forma segura en tu garaje.") { success, _ in
             DispatchQueue.main.async {
                 if success {
+                    viewModel.switchToUser(email: currentUserEmail)
                     isLoggedIn = true
                     currentScreen = .dashboard
                 } else {
@@ -220,4 +224,5 @@ struct SocialLoginTextButton: View {
 
 #Preview {
     LoginView(currentScreen: .constant(.login))
+        .environmentObject(GarageViewModel())
 }
