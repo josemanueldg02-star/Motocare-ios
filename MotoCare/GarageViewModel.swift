@@ -2,8 +2,9 @@
 //  GarageViewModel.swift
 //  MotoCare
 //
-//  Datos POR USUARIO. Cada email tiene su propia moto e historial, guardados
-//  bajo claves con espacio de nombres (garage.<email>.bike / .history).
+//  Datos POR USUARIO. Cada usuario (identificado por su uid de Firebase, estable
+//  sin importar el método de login) tiene su propia moto e historial, guardados
+//  bajo claves con espacio de nombres (garage.<uid>.bike / .history).
 //  Un usuario nuevo empieza SIN moto (motorcycle == nil) y con historial vacío.
 //
 
@@ -23,14 +24,14 @@ struct MaintenanceRecord: Identifiable, Codable, Equatable {
 @MainActor
 final class GarageViewModel: ObservableObject {
 
-    @Published private(set) var currentUserEmail: String?
+    @Published private(set) var currentUserID: String?
     @Published var motorcycle: Motorcycle? { didSet { if !isLoading { save() } } }
     @Published private(set) var maintenanceHistory: [MaintenanceRecord] = [] { didSet { if !isLoading { save() } } }
 
     private var isLoading = false
 
-    init(userEmail: String? = nil) {
-        self.currentUserEmail = userEmail
+    init(userID: String? = nil) {
+        self.currentUserID = userID
         self.motorcycle = nil
         self.maintenanceHistory = []
         loadForCurrentUser()
@@ -39,8 +40,8 @@ final class GarageViewModel: ObservableObject {
     // MARK: - Sesión
 
     /// Cambia el usuario activo y recarga SUS datos. Con nil, deja todo vacío.
-    func switchToUser(email: String?) {
-        currentUserEmail = email
+    func switchToUser(userID: String?) {
+        currentUserID = userID
         loadForCurrentUser()
     }
 
@@ -100,31 +101,31 @@ final class GarageViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        guard let email = currentUserEmail else {
+        guard let userID = currentUserID else {
             motorcycle = nil
             maintenanceHistory = []
             return
         }
-        motorcycle = Self.decode(Motorcycle.self, key: Self.bikeKey(email))
-        maintenanceHistory = Self.decode([MaintenanceRecord].self, key: Self.historyKey(email)) ?? []
+        motorcycle = Self.decode(Motorcycle.self, key: Self.bikeKey(userID))
+        maintenanceHistory = Self.decode([MaintenanceRecord].self, key: Self.historyKey(userID)) ?? []
     }
 
     private func save() {
-        guard let email = currentUserEmail else { return } // sin usuario, no persistimos nada
+        guard let userID = currentUserID else { return } // sin usuario, no persistimos nada
 
         if let bike = motorcycle, let data = try? JSONEncoder().encode(bike) {
-            UserDefaults.standard.set(data, forKey: Self.bikeKey(email))
+            UserDefaults.standard.set(data, forKey: Self.bikeKey(userID))
         } else {
-            UserDefaults.standard.removeObject(forKey: Self.bikeKey(email))
+            UserDefaults.standard.removeObject(forKey: Self.bikeKey(userID))
         }
 
         if let data = try? JSONEncoder().encode(maintenanceHistory) {
-            UserDefaults.standard.set(data, forKey: Self.historyKey(email))
+            UserDefaults.standard.set(data, forKey: Self.historyKey(userID))
         }
     }
 
-    private static func bikeKey(_ email: String) -> String { "garage.\(email).bike" }
-    private static func historyKey(_ email: String) -> String { "garage.\(email).history" }
+    private static func bikeKey(_ userID: String) -> String { "garage.\(userID).bike" }
+    private static func historyKey(_ userID: String) -> String { "garage.\(userID).history" }
 
     private static func decode<T: Decodable>(_ type: T.Type, key: String) -> T? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }

@@ -12,7 +12,7 @@ struct SplashView: View {
 
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
-    @AppStorage("currentUserEmail") var currentUserEmail = ""
+    @AppStorage("currentUserID") var currentUserID = ""
 
     @State private var size = 0.5
     @State private var opacity = 0.0
@@ -47,12 +47,12 @@ struct SplashView: View {
 
     private func checkLoginStatus() {
         // Solo hay sesión válida si además sabemos QUÉ usuario es.
-        guard isLoggedIn, !currentUserEmail.isEmpty else {
+        guard isLoggedIn, !currentUserID.isEmpty else {
             withAnimation { currentScreen = .login }
             return
         }
 
-        viewModel.switchToUser(email: currentUserEmail) // carga los datos de ese usuario
+        viewModel.switchToUser(userID: currentUserID) // carga los datos de ese usuario
 
         if useFaceID {
             authenticateWithFaceID()

@@ -9,7 +9,8 @@ struct RegisterView: View {
     @Binding var currentScreen: AppState
     @EnvironmentObject var viewModel: GarageViewModel
 
-    @AppStorage("currentUserEmail") var currentUserEmail = ""
+    @AppStorage("currentUserID") var currentUserID = ""
+    @AppStorage("currentUserDisplay") var currentUserDisplay = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
 
@@ -17,10 +18,13 @@ struct RegisterView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var isLoading = false
+    @State private var appleCoordinator = AppleSignInCoordinator()
 
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showFaceIDPrompt = false
+    @State private var showPhoneAuth = false
 
     var body: some View {
         VStack {
@@ -44,14 +48,22 @@ struct RegisterView: View {
             .padding(.horizontal, 20)
 
             Button(action: validarRegistro) {
-                Text("Registrarse")
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundStyle(.white)
-                    .cornerRadius(12)
+                ZStack {
+                    Text("Registrarse")
+                        .opacity(isLoading ? 0 : 1)
+                    if isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .foregroundStyle(.white)
+                .cornerRadius(12)
             }
+            .disabled(isLoading)
             .padding(.horizontal, 20)
             .padding(.top, 20)
             .alert("Error", isPresented: $showError) {
@@ -83,15 +95,20 @@ struct RegisterView: View {
                 .padding(.vertical, 5)
 
                 HStack(spacing: 25) {
-                    SocialLoginButton(icon: "applelogo", color: .primary) { simulateSocialLogin(provider: "Apple") }
-                    SocialLoginTextButton(text: "G", color: .red) { simulateSocialLogin(provider: "Google") }
-                    SocialLoginButton(icon: "phone.fill", color: .green) { simulateSocialLogin(provider: "Teléfono") }
+                    SocialLoginButton(icon: "applelogo", color: .primary) { registerWithApple() }
+                    SocialLoginTextButton(text: "G", color: .red) { registerWithGoogle() }
+                    SocialLoginButton(icon: "phone.fill", color: .green) { showPhoneAuth = true }
                 }
             }
             .padding(.horizontal, 20)
             .padding(.top, 10)
 
             Spacer()
+        }
+        .sheet(isPresented: $showPhoneAuth) {
+            PhoneAuthView { user in
+                applyRegistration(user)
+            }
         }
     }
 
@@ -118,32 +135,58 @@ struct RegisterView: View {
             showError = true
             return
         }
-        // Clave del arreglo: no dejar registrar un correo que ya existe.
-        if AuthService.accountExists(email: cleanEmail) {
-            errorMessage = "Ya existe una cuenta con ese correo. Inicia sesión."
-            showError = true
-            return
-        }
-
-        AuthService.register(email: cleanEmail, password: password)
-        currentUserEmail = cleanEmail
-        viewModel.switchToUser(email: cleanEmail) // usuario nuevo => garaje vacío, sin moto mock
-        isLoggedIn = true
-
-        if AuthService.biometricsAvailable() {
-            showFaceIDPrompt = true
-        } else {
-            currentScreen = .dashboard
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let user = try await AuthService.register(name: name, email: cleanEmail, password: password)
+                applyRegistration(user)
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
     }
 
-    private func simulateSocialLogin(provider: String) {
-        let socialEmail = "usuario@\(provider.lowercased()).com"
-        if !AuthService.accountExists(email: socialEmail) {
-            AuthService.register(email: socialEmail, password: UUID().uuidString)
+    private func registerWithGoogle() {
+        guard let rootVC = SocialAuthHelpers.rootViewController else { return }
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let user = try await AuthService.signInWithGoogle(presenting: rootVC)
+                applyRegistration(user)
+            } catch is CancellationError {
+                // El usuario canceló el diálogo de Google; no mostramos error.
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
-        currentUserEmail = AuthService.normalize(socialEmail)
-        viewModel.switchToUser(email: currentUserEmail)
+    }
+
+    private func registerWithApple() {
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let result = try await appleCoordinator.signIn()
+                let user = try await AuthService.signInWithApple(idToken: result.idToken, rawNonce: result.rawNonce, fullName: result.fullName)
+                applyRegistration(user)
+            } catch is CancellationError {
+                // El usuario canceló el diálogo de Apple; no mostramos error.
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
+    }
+
+    /// Aplica el resultado de cualquier método de registro (email, Google, Apple o teléfono).
+    private func applyRegistration(_ user: AppUser) {
+        currentUserID = user.uid
+        currentUserDisplay = user.displayIdentifier
+        viewModel.switchToUser(userID: user.uid) // usuario nuevo => garaje vacío, sin moto mock
         isLoggedIn = true
 
         if AuthService.biometricsAvailable() {

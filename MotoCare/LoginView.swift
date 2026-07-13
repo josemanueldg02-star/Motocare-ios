@@ -10,16 +10,20 @@ struct LoginView: View {
     @Binding var currentScreen: AppState
     @EnvironmentObject var viewModel: GarageViewModel
 
-    @AppStorage("currentUserEmail") var currentUserEmail = ""
+    @AppStorage("currentUserID") var currentUserID = ""
+    @AppStorage("currentUserDisplay") var currentUserDisplay = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
 
     @State private var emailInput = ""
     @State private var passwordInput = ""
+    @State private var isLoading = false
+    @State private var appleCoordinator = AppleSignInCoordinator()
 
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showFaceIDPrompt = false
+    @State private var showPhoneAuth = false
 
     var body: some View {
         NavigationStack {
@@ -50,17 +54,25 @@ struct LoginView: View {
                     CustomSecureField(icon: "lock.fill", placeholder: "Contraseña", text: $passwordInput)
 
                     Button(action: loginWithEmail) {
-                        Text("Iniciar Sesión")
-                            .fontWeight(.bold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
+                        ZStack {
+                            Text("Iniciar Sesión")
+                                .opacity(isLoading ? 0 : 1)
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                        }
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
                     }
+                    .disabled(isLoading)
 
                     // Face ID reentra en la ÚLTIMA cuenta usada, si el usuario lo activó.
-                    if !currentUserEmail.isEmpty && useFaceID && AuthService.biometricsAvailable() {
+                    if !currentUserID.isEmpty && useFaceID && AuthService.biometricsAvailable() {
                         Button(action: authenticateWithBiometrics) {
                             HStack {
                                 Image(systemName: "faceid")
@@ -89,9 +101,9 @@ struct LoginView: View {
                     .padding(.vertical, 5)
 
                     HStack(spacing: 25) {
-                        SocialLoginButton(icon: "applelogo", color: .primary) { simulateSocialLogin(provider: "Apple") }
-                        SocialLoginTextButton(text: "G", color: .red) { simulateSocialLogin(provider: "Google") }
-                        SocialLoginButton(icon: "phone.fill", color: .green) { simulateSocialLogin(provider: "Teléfono") }
+                        SocialLoginButton(icon: "applelogo", color: .primary) { loginWithApple() }
+                        SocialLoginTextButton(text: "G", color: .red) { loginWithGoogle() }
+                        SocialLoginButton(icon: "phone.fill", color: .green) { showPhoneAuth = true }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -122,35 +134,74 @@ struct LoginView: View {
             } message: {
                 Text("Has iniciado sesión correctamente. ¿Quieres usar Face ID para entrar más rápido la próxima vez?")
             }
+            .sheet(isPresented: $showPhoneAuth) {
+                PhoneAuthView { user in
+                    applyLogin(user)
+                    proceedAfterLogin()
+                }
+            }
         }
     }
 
     // MARK: - Lógica
 
-    private func loginWithEmail() {
-        let email = AuthService.normalize(emailInput)
-
-        guard AuthService.verify(email: email, password: passwordInput) else {
-            errorMessage = "Correo o contraseña incorrectos."
-            showError = true
-            return
-        }
-
-        currentUserEmail = email
-        viewModel.switchToUser(email: email) // carga los datos de ESTE usuario
+    /// Aplica el resultado de cualquier método de login (email, Google, Apple o teléfono).
+    private func applyLogin(_ user: AppUser) {
+        currentUserID = user.uid
+        currentUserDisplay = user.displayIdentifier
+        viewModel.switchToUser(userID: user.uid) // carga los datos de ESTE usuario
         isLoggedIn = true
-        proceedAfterLogin()
     }
 
-    private func simulateSocialLogin(provider: String) {
-        let socialEmail = "usuario@\(provider.lowercased()).com"
-        if !AuthService.accountExists(email: socialEmail) {
-            AuthService.register(email: socialEmail, password: UUID().uuidString)
+    private func loginWithEmail() {
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let user = try await AuthService.login(email: emailInput, password: passwordInput)
+                applyLogin(user)
+                proceedAfterLogin()
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
-        currentUserEmail = AuthService.normalize(socialEmail)
-        viewModel.switchToUser(email: currentUserEmail)
-        isLoggedIn = true
-        proceedAfterLogin()
+    }
+
+    private func loginWithGoogle() {
+        guard let rootVC = SocialAuthHelpers.rootViewController else { return }
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let user = try await AuthService.signInWithGoogle(presenting: rootVC)
+                applyLogin(user)
+                proceedAfterLogin()
+            } catch is CancellationError {
+                // El usuario canceló el diálogo de Google; no mostramos error.
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
+    }
+
+    private func loginWithApple() {
+        isLoading = true
+        Task {
+            defer { isLoading = false }
+            do {
+                let result = try await appleCoordinator.signIn()
+                let user = try await AuthService.signInWithApple(idToken: result.idToken, rawNonce: result.rawNonce, fullName: result.fullName)
+                applyLogin(user)
+                proceedAfterLogin()
+            } catch is CancellationError {
+                // El usuario canceló el diálogo de Apple; no mostramos error.
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
     }
 
     private func proceedAfterLogin() {
@@ -175,7 +226,7 @@ struct LoginView: View {
                                localizedReason: "Inicia sesión de forma segura en tu garaje.") { success, _ in
             DispatchQueue.main.async {
                 if success {
-                    viewModel.switchToUser(email: currentUserEmail)
+                    viewModel.switchToUser(userID: currentUserID)
                     isLoggedIn = true
                     currentScreen = .dashboard
                 } else {

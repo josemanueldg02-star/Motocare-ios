@@ -2,85 +2,137 @@
 //  AuthService.swift
 //  MotoCare
 //
-//  Autenticación local MULTIUSUARIO.
-//  Cada cuenta se identifica por su email (normalizado). La contraseña se guarda
-//  como hash PBKDF2-HMAC-SHA256 con sal en el Keychain, bajo claves propias de cada email.
-//  En producción esto sería un backend con tabla de usuarios + KDF lento (bcrypt/argon2).
+//  Autenticación MULTIUSUARIO respaldada por Firebase Auth.
+//  El perfil (nombre, email, fecha de alta) se guarda en Firestore, en la
+//  colección "users", usando como id el uid que asigna Firebase Auth.
 //
 
 import Foundation
-import CommonCrypto
+import FirebaseAuth
+import FirebaseFirestore
+import FirebaseCore
+import GoogleSignIn
 import LocalAuthentication
+import UIKit
+
+struct AppUser: Codable {
+    let uid: String
+    let name: String
+    let email: String
+    let phoneNumber: String?
+    let createdAt: Date
+
+    /// Email o, si no hay (cuentas de solo teléfono), el número de teléfono.
+    var displayIdentifier: String {
+        if !email.isEmpty { return email }
+        return phoneNumber ?? ""
+    }
+}
+
+struct AuthServiceError: LocalizedError {
+    let errorDescription: String?
+}
 
 enum AuthService {
 
-    private static let accountsKey = "motocare.accounts"   // [String] de emails registrados
-    private static let pbkdf2Rounds: UInt32 = 100_000
-    private static let saltByteCount = 16
-    private static let derivedKeyByteCount = 32
-    private static let maxFailedAttempts = 5
-    private static let baseLockoutSeconds: TimeInterval = 30
-    private static let maxLockoutSeconds: TimeInterval = 3600
+    private static let db = Firestore.firestore()
 
-    /// ¿Ya existe una cuenta con ese correo?
-    static func accountExists(email: String) -> Bool {
-        registeredEmails().contains(normalize(email))
-    }
-
-    /// Registra un usuario nuevo. Devuelve false si el correo ya está en uso.
+    /// Registra un usuario nuevo en Firebase Auth y crea su perfil en Firestore.
     @discardableResult
-    static func register(email: String, password: String) -> Bool {
-        let key = normalize(email)
-        guard !key.isEmpty, !accountExists(email: key) else { return false }
+    static func register(name: String, email: String, password: String) async throws -> AppUser {
+        let cleanEmail = normalize(email)
+        do {
+            let result = try await Auth.auth().createUser(withEmail: cleanEmail, password: password)
 
-        let salt = randomSaltHex()
-        let hash = hashPassword(password, saltHex: salt)
+            let changeRequest = result.user.createProfileChangeRequest()
+            changeRequest.displayName = name
+            try? await changeRequest.commitChanges()
 
-        guard KeychainHelper.save(salt, for: saltKey(key)),
-              KeychainHelper.save(hash, for: hashKey(key), requireBiometrics: true) else {
-            KeychainHelper.delete(saltKey(key))
-            KeychainHelper.delete(hashKey(key))
-            return false
+            let user = AppUser(uid: result.user.uid, name: name, email: cleanEmail, phoneNumber: nil, createdAt: Date())
+            try await db.collection("users").document(user.uid).setData(from: user)
+            return user
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
         }
-
-        var emails = registeredEmails()
-        emails.append(key)
-        UserDefaults.standard.set(emails, forKey: accountsKey)
-        return true
     }
 
-    /// Verifica email + contraseña contra el hash almacenado de ESA cuenta.
-    /// Bloquea la cuenta temporalmente tras varios intentos fallidos consecutivos.
-    static func verify(email: String, password: String) -> Bool {
-        let key = normalize(email)
-
-        if let lockedUntil = lockoutExpiry(for: key), lockedUntil > Date() {
-            return false
+    /// Inicia sesión con email y contraseña contra Firebase Auth.
+    static func login(email: String, password: String) async throws -> AppUser {
+        let cleanEmail = normalize(email)
+        do {
+            let result = try await Auth.auth().signIn(withEmail: cleanEmail, password: password)
+            return try await fetchOrCreateProfile(for: result.user, defaultName: nil)
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
         }
-
-        guard let saltHex = KeychainHelper.read(saltKey(key)),
-              let storedHash = KeychainHelper.read(
-                hashKey(key),
-                prompt: "Verifica tu identidad para iniciar sesión"
-              ) else {
-            return false
-        }
-
-        guard constantTimeCompare(hashPassword(password, saltHex: saltHex), storedHash) else {
-            registerFailedAttempt(for: key)
-            return false
-        }
-
-        clearFailedAttempts(for: key)
-        return true
     }
 
-    /// Segundos restantes de bloqueo por intentos fallidos, o nil si la cuenta no está bloqueada.
-    static func lockoutRemaining(email: String) -> TimeInterval? {
-        let key = normalize(email)
-        guard let lockedUntil = lockoutExpiry(for: key) else { return nil }
-        let remaining = lockedUntil.timeIntervalSinceNow
-        return remaining > 0 ? remaining : nil
+    /// Inicia sesión (o registra, si es la primera vez) con una cuenta de Google.
+    static func signInWithGoogle(presenting viewController: UIViewController) async throws -> AppUser {
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            throw AuthServiceError(errorDescription: "Falta configurar Firebase (GoogleService-Info.plist).")
+        }
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        do {
+            let googleResult = try await GIDSignIn.sharedInstance.signIn(withPresenting: viewController)
+            guard let idToken = googleResult.user.idToken?.tokenString else {
+                throw AuthServiceError(errorDescription: "No se pudo obtener el token de Google.")
+            }
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: googleResult.user.accessToken.tokenString
+            )
+            let authResult = try await Auth.auth().signIn(with: credential)
+            return try await fetchOrCreateProfile(for: authResult.user, defaultName: googleResult.user.profile?.name)
+        } catch let signInError as GIDSignInError where signInError.code == .canceled {
+            throw CancellationError()
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
+        }
+    }
+
+    /// Inicia sesión (o registra, si es la primera vez) con una cuenta de Apple.
+    /// `rawNonce` debe ser el mismo valor (sin procesar) usado al crear la petición
+    /// de `ASAuthorizationAppleIDProvider`, para que Firebase pueda validar el token.
+    static func signInWithApple(idToken: String, rawNonce: String, fullName: PersonNameComponents?) async throws -> AppUser {
+        let credential = OAuthProvider.credential(providerID: .apple, idToken: idToken, rawNonce: rawNonce)
+        do {
+            let authResult = try await Auth.auth().signIn(with: credential)
+            let name = [fullName?.givenName, fullName?.familyName]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            return try await fetchOrCreateProfile(for: authResult.user, defaultName: name.isEmpty ? nil : name)
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
+        }
+    }
+
+    /// Envía un SMS con un código a `phoneNumber` (formato E.164, ej. "+34612345678").
+    /// Devuelve un identificador de verificación que hay que guardar y pasar a
+    /// `confirmPhoneCode` junto con el código que introduzca el usuario.
+    static func sendPhoneVerificationCode(phoneNumber: String) async throws -> String {
+        do {
+            return try await PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil)
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
+        }
+    }
+
+    /// Completa el login (o registro, si es la primera vez) verificando el código de SMS.
+    static func confirmPhoneCode(verificationID: String, code: String) async throws -> AppUser {
+        let credential = PhoneAuthProvider.provider().credential(withVerificationID: verificationID, verificationCode: code)
+        do {
+            let authResult = try await Auth.auth().signIn(with: credential)
+            return try await fetchOrCreateProfile(for: authResult.user, defaultName: nil)
+        } catch {
+            throw AuthServiceError(errorDescription: spanishMessage(for: error))
+        }
+    }
+
+    /// Cierra la sesión activa.
+    static func logout() throws {
+        try Auth.auth().signOut()
     }
 
     /// Normaliza un email para usarlo como identificador consistente.
@@ -95,91 +147,42 @@ enum AuthService {
 
     // MARK: - Privado
 
-    private static func registeredEmails() -> [String] {
-        UserDefaults.standard.stringArray(forKey: accountsKey) ?? []
-    }
-
-    private static func saltKey(_ email: String) -> String { "motocare.salt.\(email)" }
-    private static func hashKey(_ email: String) -> String { "motocare.hash.\(email)" }
-    private static func attemptsKey(_ email: String) -> String { "motocare.attempts.\(email)" }
-    private static func lockoutKey(_ email: String) -> String { "motocare.lockout.\(email)" }
-
-    private static func randomSaltHex() -> String {
-        var bytes = [UInt8](repeating: 0, count: saltByteCount)
-        arc4random_buf(&bytes, bytes.count)
-        return bytes.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func hashPassword(_ password: String, saltHex: String) -> String {
-        let saltBytes = hexToBytes(saltHex)
-        var derivedKey = [UInt8](repeating: 0, count: derivedKeyByteCount)
-
-        let status = CCKeyDerivationPBKDF(
-            CCPBKDFAlgorithm(kCCPBKDF2),
-            password, password.utf8.count,
-            saltBytes, saltBytes.count,
-            CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-            pbkdf2Rounds,
-            &derivedKey, derivedKey.count
-        )
-        precondition(status == kCCSuccess, "PBKDF2 derivation failed")
-
-        return derivedKey.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func hexToBytes(_ hex: String) -> [UInt8] {
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(hex.count / 2)
-        var idx = hex.startIndex
-        while idx < hex.endIndex {
-            let next = hex.index(idx, offsetBy: 2)
-            if let byte = UInt8(hex[idx..<next], radix: 16) {
-                bytes.append(byte)
-            }
-            idx = next
+    /// Recupera el perfil de Firestore tras un login; si no existiera (primer acceso con
+    /// Google/Apple, o cuenta creada fuera de la app), lo crea. `defaultName` solo se usa
+    /// para ese primer alta, ya que Google/Apple únicamente entregan el nombre una vez.
+    private static func fetchOrCreateProfile(for user: User, defaultName: String?) async throws -> AppUser {
+        let ref = db.collection("users").document(user.uid)
+        if let snapshot = try? await ref.getDocument(), snapshot.exists,
+           let existing = try? snapshot.data(as: AppUser.self) {
+            return existing
         }
-        return bytes
+        let name = defaultName ?? user.displayName ?? ""
+        let fallback = AppUser(uid: user.uid, name: name, email: user.email ?? "", phoneNumber: user.phoneNumber, createdAt: Date())
+        try await ref.setData(from: fallback)
+        return fallback
     }
 
-    /// Compara dos cadenas byte a byte en tiempo constante (no aborta en la primera
-    /// diferencia), para evitar filtrar por temporización cuántos bytes del hash coinciden.
-    private static func constantTimeCompare(_ lhs: String, _ rhs: String) -> Bool {
-        let lhsBytes = Array(lhs.utf8)
-        let rhsBytes = Array(rhs.utf8)
+    private static func spanishMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        print("🔥 AuthService error → domain: \(nsError.domain), code: \(nsError.code), userInfo: \(nsError.userInfo)")
 
-        guard lhsBytes.count == rhsBytes.count else { return false }
-
-        var diff: UInt8 = 0
-        for i in 0..<lhsBytes.count {
-            diff |= lhsBytes[i] ^ rhsBytes[i]
+        guard let code = AuthErrorCode(rawValue: nsError.code) else {
+            return "No se pudo completar la operación. Inténtalo de nuevo."
         }
-        return diff == 0
-    }
-
-    /// Fecha hasta la que la cuenta permanece bloqueada, o nil si no hay bloqueo registrado.
-    private static func lockoutExpiry(for key: String) -> Date? {
-        guard let raw = KeychainHelper.read(lockoutKey(key)),
-              let interval = TimeInterval(raw) else { return nil }
-        return Date(timeIntervalSince1970: interval)
-    }
-
-    /// Suma un intento fallido y, a partir de `maxFailedAttempts`, aplica un bloqueo
-    /// con espera creciente (backoff exponencial acotado a `maxLockoutSeconds`).
-    private static func registerFailedAttempt(for key: String) {
-        let attempts = (KeychainHelper.read(attemptsKey(key)).flatMap(Int.init) ?? 0) + 1
-        KeychainHelper.save(String(attempts), for: attemptsKey(key))
-
-        guard attempts >= maxFailedAttempts else { return }
-
-        let extraFailures = attempts - maxFailedAttempts
-        let lockoutSeconds = min(baseLockoutSeconds * pow(2, Double(extraFailures)), maxLockoutSeconds)
-        let expiry = Date().addingTimeInterval(lockoutSeconds)
-        KeychainHelper.save(String(expiry.timeIntervalSince1970), for: lockoutKey(key))
-    }
-
-    /// Limpia el contador de intentos fallidos y cualquier bloqueo tras un login correcto.
-    private static func clearFailedAttempts(for key: String) {
-        KeychainHelper.delete(attemptsKey(key))
-        KeychainHelper.delete(lockoutKey(key))
+        switch code {
+        case .invalidEmail: return "El correo introducido no es válido."
+        case .emailAlreadyInUse: return "Ya existe una cuenta con ese correo. Inicia sesión."
+        case .weakPassword: return "La contraseña debe tener al menos 6 caracteres."
+        case .wrongPassword, .invalidCredential: return "Correo o contraseña incorrectos."
+        case .invalidPhoneNumber: return "El número de teléfono no es válido. Incluye el prefijo del país (ej. +34)."
+        case .invalidVerificationCode: return "El código introducido no es correcto."
+        case .sessionExpired: return "El código ha caducado. Solicita uno nuevo."
+        case .quotaExceeded: return "Se ha superado el límite de SMS. Inténtalo más tarde."
+        case .missingPhoneNumber: return "Introduce un número de teléfono."
+        case .userNotFound: return "No existe ninguna cuenta con ese correo."
+        case .networkError: return "Sin conexión. Comprueba tu red e inténtalo de nuevo."
+        case .tooManyRequests: return "Demasiados intentos. Espera un momento antes de volver a intentarlo."
+        default: return "No se pudo completar la operación. Inténtalo de nuevo."
+        }
     }
 }

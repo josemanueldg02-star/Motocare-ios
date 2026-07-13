@@ -9,7 +9,8 @@ struct ProfileView: View {
     @Binding var currentScreen: AppState
     @EnvironmentObject var viewModel: GarageViewModel
 
-    @AppStorage("currentUserEmail") var currentUserEmail = ""
+    @AppStorage("currentUserID") var currentUserID = ""
+    @AppStorage("currentUserDisplay") var currentUserDisplay = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
 
@@ -19,7 +20,7 @@ struct ProfileView: View {
         NavigationStack {
             Form {
                 Section("Cuenta") {
-                    LabeledContent("Correo", value: currentUserEmail.isEmpty ? "—" : currentUserEmail)
+                    LabeledContent("Cuenta", value: currentUserDisplay.isEmpty ? "—" : currentUserDisplay)
                 }
 
                 Section("Mi moto") {
@@ -68,9 +69,11 @@ struct ProfileView: View {
     }
 
     private func logout() {
+        try? AuthService.logout()
         isLoggedIn = false
-        currentUserEmail = ""
-        viewModel.switchToUser(email: nil) // descarga los datos del usuario en memoria
+        currentUserID = ""
+        currentUserDisplay = ""
+        viewModel.switchToUser(userID: nil) // descarga los datos del usuario en memoria
         withAnimation { currentScreen = .login }
     }
 }
