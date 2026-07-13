@@ -2,13 +2,13 @@
 //  Motorcycle.swift
 //  MotoCare
 //
-//  Created by Jose Manuel Dominguez Garcia on 11/07/2026.
-//
 
 import Foundation
 
-struct Motorcycle {
-    let make: String
-    let model: String
-    var mileage: Int
+struct Motorcycle: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var make: String
+    var model: String
+    var mileage: Int                 // km actuales (Int, no String)
+    var serviceIntervalKm: Int = 5000 // intervalo de revisión configurable
 }

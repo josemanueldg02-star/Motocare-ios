@@ -2,75 +2,88 @@
 //  GarageViewModel.swift
 //  MotoCare
 //
-//  Created by Jose Manuel Dominguez Garcia on 12/07/2026.
-//
 
 import SwiftUI
 import Foundation
 import Combine
 
-struct MaintenanceRecord: Identifiable, Codable {
+struct MaintenanceRecord: Identifiable, Codable, Equatable {
     var id = UUID()
-    let type: String
-    let date: Date
-    let mileage: String
-    let cost: String
-    let notes: String
+    var type: String
+    var date: Date
+    var mileage: Int   // Int, no String
+    var cost: Double   // Double, no String
+    var notes: String
 }
 
-class GarageViewModel: ObservableObject {
-    
-    @Published var maintenanceHistory: [MaintenanceRecord] = [] {
-        didSet {
-            saveData()
-        }
+@MainActor
+final class GarageViewModel: ObservableObject {
+
+    // Fuente ÚNICA de verdad de la moto: ya no vive suelta en DashboardView.
+    @Published var motorcycle: Motorcycle {
+        didSet { save() }
     }
-    
-    let saveKey = "SavedMaintenanceHistory"
-    
+
+    @Published private(set) var maintenanceHistory: [MaintenanceRecord] = [] {
+        didSet { save() }
+    }
+
+    private static let historyKey = "SavedMaintenanceHistory"
+    private static let bikeKey = "SavedMotorcycle"
+
     init() {
-        loadData()
+        // Cargamos la moto guardada o usamos una por defecto la primera vez.
+        self.motorcycle = Self.load(Motorcycle.self, key: Self.bikeKey)
+            ?? Motorcycle(make: "Kawasaki", model: "ER-6f", mileage: 21560)
+        self.maintenanceHistory = Self.load([MaintenanceRecord].self, key: Self.historyKey) ?? []
     }
-    
-    // Función para añadir
-    func addRecord(type: String, date: Date, mileage: String, cost: String, notes: String) {
-        let newRecord = MaintenanceRecord(
-            type: type,
-            date: date,
-            mileage: mileage,
-            cost: cost,
-            notes: notes
-        )
-        
-        maintenanceHistory.insert(newRecord, at: 0)
-    }
-    
-    // ==========================================
-    //        NUEVAS FUNCIONES DE MEMORIA
-    // ==========================================
-    
-    // Función para GUARDAR
-    func saveData() {
-        // Intentamos empaquetar nuestra lista en formato JSON
-        if let encodedData = try? JSONEncoder().encode(maintenanceHistory) {
-            // Si funciona, lo metemos en el cajón de UserDefaults con nuestra llave
-            UserDefaults.standard.set(encodedData, forKey: saveKey)
+
+    // MARK: - Operaciones
+
+    func addRecord(type: String, date: Date, mileage: Int, cost: Double, notes: String) {
+        let record = MaintenanceRecord(type: type, date: date, mileage: mileage, cost: cost, notes: notes)
+        maintenanceHistory.append(record)
+        maintenanceHistory.sort { $0.date > $1.date }   // más reciente primero
+
+        // Si el mantenimiento tiene un km mayor, la moto queda al día automáticamente.
+        if mileage > motorcycle.mileage {
+            motorcycle.mileage = mileage
         }
     }
-    
-    // Función para CARGAR
-    func loadData() {
-        // 1. Miramos si hay algo guardado en el cajón con nuestra llave
-        if let savedData = UserDefaults.standard.data(forKey: saveKey) {
-            // 2. Intentamos desempaquetar ese JSON y convertirlo de nuevo a [MaintenanceRecord]
-            if let decodedRecords = try? JSONDecoder().decode([MaintenanceRecord].self, from: savedData) {
-                // 3. Si todo va bien, se lo asignamos a nuestra lista
-                maintenanceHistory = decodedRecords
-                return
-            }
+
+    func deleteRecords(at offsets: IndexSet) {
+        maintenanceHistory.remove(atOffsets: offsets)
+    }
+
+    // MARK: - Estado derivado (conecta datos que antes estaban desconectados)
+
+    /// Km al que toca la próxima revisión, a partir del último mantenimiento registrado.
+    var nextServiceMileage: Int {
+        let lastServiceMileage = maintenanceHistory.map(\.mileage).max() ?? motorcycle.mileage
+        return lastServiceMileage + motorcycle.serviceIntervalKm
+    }
+
+    var isServiceDue: Bool {
+        motorcycle.mileage >= nextServiceMileage
+    }
+
+    var totalSpent: Double {
+        maintenanceHistory.reduce(0) { $0 + $1.cost }
+    }
+
+    // MARK: - Persistencia
+
+    private func save() {
+        if let history = try? JSONEncoder().encode(maintenanceHistory) {
+            UserDefaults.standard.set(history, forKey: Self.historyKey)
         }
-        
-        // Si falla o no hay datos (ej. la primera vez que se abre la app), la lista empieza vacía
-        maintenanceHistory = []
+        if let bike = try? JSONEncoder().encode(motorcycle) {
+            UserDefaults.standard.set(bike, forKey: Self.bikeKey)
+        }
+    }
+
+    private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
     }
 }

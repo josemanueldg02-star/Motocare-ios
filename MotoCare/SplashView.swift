@@ -1,85 +1,81 @@
+//
+//  SplashView.swift
+//  MotoCare
+//
+
 import SwiftUI
-import LocalAuthentication // Para poder usar FaceID al arrancar
+import LocalAuthentication
 
 struct SplashView: View {
     @Binding var currentScreen: AppState
-    
+
     @AppStorage("isLoggedIn") var isLoggedIn = false
-    @AppStorage("useFaceID") var useFaceID = false // Saber si activó FaceID
-    
-    // Variables para la animación inicial
+    @AppStorage("useFaceID") var useFaceID = false
+
     @State private var size = 0.5
     @State private var opacity = 0.0
-    
+
     var body: some View {
         ZStack {
-            // Fondo para asegurar el centrado absoluto en toda la pantalla
-            Color(UIColor.systemBackground).ignoresSafeArea()
-            
+            Color(.systemBackground).ignoresSafeArea()
+
             VStack(spacing: 20) {
                 Text("Motocare")
                     .font(.system(size: 45, weight: .heavy, design: .rounded))
-                    .foregroundColor(.primary)
-                
-                // Asegúrate de que "motorcycle" esté todo en minúsculas
+                    .foregroundStyle(.primary)
+
                 Image(systemName: "motorcycle")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 120, height: 120)
-                    .foregroundColor(.blue)
+                    .foregroundStyle(.blue)
             }
             .scaleEffect(size)
             .opacity(opacity)
         }
-        .onAppear {
-            // 1. Efecto de aparición suave (1 segundo)
+        .task {
             withAnimation(.easeIn(duration: 1.0)) {
                 self.size = 1.0
                 self.opacity = 1.0
             }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                checkLoginStatus() // <- CAMBIADO: Llamamos a la nueva lógica
-            }
+            // Espera de arranque sin bloquear el hilo con DispatchQueue.
+            try? await Task.sleep(for: .seconds(2.5))
+            checkLoginStatus()
         }
     }
-    
-    // ==========================================
-    //        NUEVAS FUNCIONES DE ARRANQUE
-    // ==========================================
 
-    func checkLoginStatus() {
-        if isLoggedIn {
-            if useFaceID {
-                // Si está logueado y activó FaceID, lo pedimos
-                authenticateWithFaceID()
-            } else {
-                // Si está logueado pero NO activó FaceID, entra directo
-                withAnimation { currentScreen = .dashboard }
-            }
-        } else {
-            // No está logueado
+    private func checkLoginStatus() {
+        guard isLoggedIn else {
             withAnimation { currentScreen = .login }
+            return
         }
-    }
-
-    func authenticateWithFaceID() {
-        let context = LAContext()
-        var error: NSError?
-        
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Inicia sesión en tu garaje") { success, _ in
-                DispatchQueue.main.async {
-                    if success {
-                        withAnimation { currentScreen = .dashboard }
-                    } else {
-                        // Si cancela o no reconoce la cara, le mandamos a poner la contraseña
-                        withAnimation { currentScreen = .login }
-                    }
-                }
-            }
+        if useFaceID {
+            authenticateWithFaceID()
         } else {
             withAnimation { currentScreen = .dashboard }
         }
     }
+
+    private func authenticateWithFaceID() {
+        let context = LAContext()
+        var error: NSError?
+
+        // AGUJERO CORREGIDO: si no hay biometría, exigimos contraseña en vez de
+        // dejar pasar directo al dashboard.
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            withAnimation { currentScreen = .login }
+            return
+        }
+
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
+                               localizedReason: "Inicia sesión en tu garaje") { success, _ in
+            DispatchQueue.main.async {
+                withAnimation { currentScreen = success ? .dashboard : .login }
+            }
+        }
+    }
+}
+
+#Preview {
+    SplashView(currentScreen: .constant(.splash))
 }

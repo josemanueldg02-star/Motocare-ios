@@ -2,68 +2,67 @@
 //  LoginView.swift
 //  MotoCare
 //
-//  Created by Jose Manuel Dominguez Garcia on 11/07/2026.
-//
 
 import SwiftUI
 import LocalAuthentication
 
 struct LoginView: View {
     @Binding var currentScreen: AppState
-    
-    // Variables guardadas en el disco duro
+
+    // El email no es secreto (es un identificador), puede vivir en AppStorage.
+    // La contraseña YA NO se guarda aquí: la gestiona AuthService (Keychain + hash).
     @AppStorage("savedEmail") var savedEmail = ""
-    @AppStorage("savedPassword") var savedPassword = ""
     @AppStorage("isLoggedIn") var isLoggedIn = false
     @AppStorage("useFaceID") var useFaceID = false
-    
+
     @State private var emailInput = ""
     @State private var passwordInput = ""
-    
+
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var showFaceIDPrompt = false // Para preguntar por FaceID
-    
+    @State private var showFaceIDPrompt = false
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 25) {
                 Spacer()
-                
+
                 Image(systemName: "motorcycle.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 80, height: 80)
-                    .foregroundColor(.blue)
-                
+                    .foregroundStyle(.blue)
+
                 Text("Bienvenido a Motocare")
                     .font(.title)
                     .fontWeight(.bold)
-                
+
                 Text("Tu Taller Virtual en el bolsillo")
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundStyle(.gray)
                     .padding(.bottom, 20)
-                
+
                 VStack(spacing: 15) {
                     CustomTextField(icon: "envelope.fill", placeholder: "Correo electrónico", text: $emailInput)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
-                    
+                        .autocorrectionDisabled(true)
+
                     CustomSecureField(icon: "lock.fill", placeholder: "Contraseña", text: $passwordInput)
-                    
-                    // Botón de Iniciar Sesión Normal
+
                     Button(action: loginWithEmail) {
                         Text("Iniciar Sesión")
                             .fontWeight(.bold)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.blue)
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .cornerRadius(12)
                     }
-                    
-                    // Botón Face ID (Solo aparece si ya hay un usuario registrado en el móvil)
-                    if !savedEmail.isEmpty {
+
+                    // El botón Face ID solo aparece si HAY cuenta, el usuario lo activó
+                    // y el dispositivo lo soporta. (Antes bastaba con tener un email.)
+                    if AuthService.hasAccount() && useFaceID && AuthService.biometricsAvailable() {
                         Button(action: authenticateWithBiometrics) {
                             HStack {
                                 Image(systemName: "faceid")
@@ -74,23 +73,23 @@ struct LoginView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.black)
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .cornerRadius(12)
                         }
                     }
                 }
                 .padding(.horizontal, 20)
-                
+
                 VStack(spacing: 15) {
                     HStack {
                         VStack { Divider() }
                         Text("O continúa con")
                             .font(.footnote)
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.gray)
                         VStack { Divider() }
                     }
                     .padding(.vertical, 5)
-                    
+
                     HStack(spacing: 25) {
                         SocialLoginButton(icon: "applelogo", color: .primary) { simulateSocialLogin(provider: "Apple") }
                         SocialLoginTextButton(text: "G", color: .red) { simulateSocialLogin(provider: "Google") }
@@ -98,22 +97,21 @@ struct LoginView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                
+
                 Spacer()
-                
+
                 NavigationLink(destination: RegisterView(currentScreen: $currentScreen)) {
                     Text("¿No tienes cuenta? **Regístrate**")
-                        .foregroundColor(.blue)
+                        .foregroundStyle(.blue)
                         .padding(.bottom, 20)
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar) // antes .navigationBarHidden(true)
             .alert("Error de Inicio", isPresented: $showError) {
                 Button("Entendido", role: .cancel) { }
             } message: {
                 Text(errorMessage)
             }
-            // <- NUEVA ALERTA: Pregunta por Face ID tras login exitoso
             .alert("¿Activar Face ID?", isPresented: $showFaceIDPrompt) {
                 Button("Sí, activar") {
                     useFaceID = true
@@ -124,63 +122,63 @@ struct LoginView: View {
                     currentScreen = .dashboard
                 }
             } message: {
-                Text("Has iniciado sesión correctamente. ¿Quieres usar Face ID para entrar automáticamente la próxima vez?")
+                Text("Has iniciado sesión correctamente. ¿Quieres usar Face ID para entrar más rápido la próxima vez?")
             }
         }
     }
-    
-    // ==========================================
-    //        LÓGICA DE INICIO DE SESIÓN
-    // ==========================================
-    
-    func loginWithEmail() {
-        if emailInput == savedEmail && passwordInput == savedPassword && !savedEmail.isEmpty {
-            isLoggedIn = true
-            // En vez de ir directo al dashboard, preguntamos por FaceID si no lo tiene activo
-            if !useFaceID {
-                showFaceIDPrompt = true
-            } else {
-                currentScreen = .dashboard
-            }
-        } else {
+
+    // MARK: - Lógica
+
+    private func loginWithEmail() {
+        guard !savedEmail.isEmpty,
+              emailInput == savedEmail,
+              AuthService.verify(password: passwordInput) else {
             errorMessage = "Correo o contraseña incorrectos."
             showError = true
+            return
         }
-    }
-    
-    func simulateSocialLogin(provider: String) {
-        savedEmail = "usuario@\(provider.lowercased()).com"
-        savedPassword = "social_password_mock"
         isLoggedIn = true
-        if !useFaceID {
+        proceedAfterLogin()
+    }
+
+    private func simulateSocialLogin(provider: String) {
+        savedEmail = "usuario@\(provider.lowercased()).com"
+        // Registramos un secreto aleatorio para mantener la cuenta consistente.
+        AuthService.register(password: UUID().uuidString)
+        isLoggedIn = true
+        proceedAfterLogin()
+    }
+
+    /// Tras un login válido: ofrece activar Face ID solo si el dispositivo lo soporta.
+    private func proceedAfterLogin() {
+        if AuthService.biometricsAvailable() && !useFaceID {
             showFaceIDPrompt = true
         } else {
             currentScreen = .dashboard
         }
     }
-    
-    func authenticateWithBiometrics() {
+
+    private func authenticateWithBiometrics() {
         let context = LAContext()
         var error: NSError?
-        
-        // Verificamos si el iPhone tiene FaceID habilitado
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            let reason = "Inicia sesión de forma segura en tu garaje."
-            
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, authenticationError in
-                DispatchQueue.main.async {
-                    if success {
-                        isLoggedIn = true
-                        currentScreen = .dashboard
-                    } else {
-                        errorMessage = "No se pudo reconocer tu rostro/huella."
-                        showError = true
-                    }
-                }
-            }
-        } else {
+
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
             errorMessage = "Face ID no está configurado en este dispositivo."
             showError = true
+            return
+        }
+
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
+                               localizedReason: "Inicia sesión de forma segura en tu garaje.") { success, _ in
+            DispatchQueue.main.async {
+                if success {
+                    isLoggedIn = true
+                    currentScreen = .dashboard
+                } else {
+                    errorMessage = "No se pudo reconocer tu rostro/huella."
+                    showError = true
+                }
+            }
         }
     }
 }
@@ -189,14 +187,14 @@ struct SocialLoginButton: View {
     let icon: String
     let color: Color
     var action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.title2)
                 .frame(width: 55, height: 55)
-                .background(Color(UIColor.secondarySystemBackground))
-                .foregroundColor(color)
+                .background(Color(.secondarySystemBackground))
+                .foregroundStyle(color)
                 .clipShape(Circle())
         }
     }
@@ -206,16 +204,20 @@ struct SocialLoginTextButton: View {
     let text: String
     let color: Color
     var action: () -> Void
-    
+
     var body: some View {
-        Button(action: action) { 
+        Button(action: action) {
             Text(text)
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(width: 55, height: 55)
-                .background(Color(UIColor.secondarySystemBackground))
-                .foregroundColor(color)
+                .background(Color(.secondarySystemBackground))
+                .foregroundStyle(color)
                 .clipShape(Circle())
         }
     }
+}
+
+#Preview {
+    LoginView(currentScreen: .constant(.login))
 }

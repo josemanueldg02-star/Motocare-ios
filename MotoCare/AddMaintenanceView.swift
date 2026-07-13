@@ -2,45 +2,46 @@
 //  AddMaintenanceView.swift
 //  MotoCare
 //
-//  Created by Jose Manuel Dominguez Garcia on 12/07/2026.
-//
 
 import SwiftUI
 
 struct AddMaintenanceView: View {
     @Environment(\.dismiss) var dismiss
-    
     @EnvironmentObject var viewModel: GarageViewModel
-    
+
     @State private var maintenanceType = "Cambio de Aceite"
     @State private var date = Date()
     @State private var mileage = ""
     @State private var cost = ""
     @State private var notes = ""
-    
+
     let maintenanceOptions = ["Cambio de Aceite", "Neumáticos", "Frenos", "Kit de Arrastre", "Revisión General", "Otro"]
-    
+
+    // Validación real: los campos numéricos deben parsear a número, no solo "no estar vacíos".
+    private var parsedMileage: Int? { Int(mileage) }
+    private var parsedCost: Double? {
+        // En España el teclado decimal escribe "," -> Double("45,5") es nil. Normalizamos.
+        Double(cost.replacingOccurrences(of: ",", with: "."))
+    }
+    private var isFormValid: Bool { parsedMileage != nil && parsedCost != nil }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section(header: Text("Detalles principales")) {
                     Picker("Tipo de Mantenimiento", selection: $maintenanceType) {
-                        ForEach(maintenanceOptions, id: \.self) { option in
-                            Text(option)
-                        }
+                        ForEach(maintenanceOptions, id: \.self) { Text($0) }
                     }
-                    
-                    DatePicker("Fecha", selection: $date, displayedComponents: .date)
+                    DatePicker("Fecha", selection: $date, in: ...Date(), displayedComponents: .date)
                 }
-                
+
                 Section(header: Text("Datos adicionales")) {
                     TextField("Kilometraje actual", text: $mileage)
                         .keyboardType(.numberPad)
-                    
                     TextField("Coste (€)", text: $cost)
                         .keyboardType(.decimalPad)
                 }
-                
+
                 Section(header: Text("Notas / Observaciones")) {
                     TextEditor(text: $notes)
                         .frame(height: 100)
@@ -49,32 +50,32 @@ struct AddMaintenanceView: View {
             .navigationTitle("Añadir Registro")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancelar") {
-                        dismiss()
-                    }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Guardar") {
-                        viewModel.addRecord(
-                            type: maintenanceType,
-                            date: date,
-                            mileage: mileage,
-                            cost: cost,
-                            notes: notes
-                        )
-                        dismiss()
-                    }
-                    .fontWeight(.bold)
-                    .disabled(mileage.isEmpty || cost.isEmpty)
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") { save() }
+                        .fontWeight(.bold)
+                        .disabled(!isFormValid)
                 }
             }
         }
+    }
+
+    private func save() {
+        guard let mileageValue = parsedMileage, let costValue = parsedCost else { return }
+        viewModel.addRecord(
+            type: maintenanceType,
+            date: date,
+            mileage: mileageValue,
+            cost: costValue,
+            notes: notes
+        )
+        dismiss()
     }
 }
 
 #Preview {
     AddMaintenanceView()
-        .environmentObject(GarageViewModel()) 
+        .environmentObject(GarageViewModel())
 }
