@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DashboardView: View {
     // Usamos el modelo que creamos al principio para simular datos
-    @State private var myBike = Motorcycle(make: "Kawasaki", model: "ER-6f", mileage: 15000)
+    @State private var myBike = Motorcycle(make: "Kawasaki", model: "ER-6f", mileage: 21560)
     
     // Controla cuándo se abre la ventana flotante
     @State private var showAddMaintenance = false

@@ -9,9 +9,8 @@ import SwiftUI
 import Foundation
 import Combine
 
-// 1. EL MOLDE: Definimos qué datos componen un registro de mantenimiento
-struct MaintenanceRecord: Identifiable {
-    let id = UUID() // Identificador único generado automáticamente por Apple
+struct MaintenanceRecord: Identifiable, Codable {
+    var id = UUID()
     let type: String
     let date: Date
     let mileage: String
@@ -19,13 +18,21 @@ struct MaintenanceRecord: Identifiable {
     let notes: String
 }
 
-// 2. EL CEREBRO: Guarda la lista y gestiona los datos
 class GarageViewModel: ObservableObject {
     
-    // @Published es mágico: si esta lista cambia, avisa a las pantallas para que se actualicen solas
-    @Published var maintenanceHistory: [MaintenanceRecord] = []
+    @Published var maintenanceHistory: [MaintenanceRecord] = [] {
+        didSet {
+            saveData()
+        }
+    }
     
-    // Función que usaremos desde el botón "Guardar" para añadir un registro
+    let saveKey = "SavedMaintenanceHistory"
+    
+    init() {
+        loadData()
+    }
+    
+    // Función para añadir
     func addRecord(type: String, date: Date, mileage: String, cost: String, notes: String) {
         let newRecord = MaintenanceRecord(
             type: type,
@@ -35,7 +42,35 @@ class GarageViewModel: ObservableObject {
             notes: notes
         )
         
-        // Insertamos el nuevo registro en la posición 0 (el principio) para ver el más reciente primero
         maintenanceHistory.insert(newRecord, at: 0)
+    }
+    
+    // ==========================================
+    //        NUEVAS FUNCIONES DE MEMORIA
+    // ==========================================
+    
+    // Función para GUARDAR
+    func saveData() {
+        // Intentamos empaquetar nuestra lista en formato JSON
+        if let encodedData = try? JSONEncoder().encode(maintenanceHistory) {
+            // Si funciona, lo metemos en el cajón de UserDefaults con nuestra llave
+            UserDefaults.standard.set(encodedData, forKey: saveKey)
+        }
+    }
+    
+    // Función para CARGAR
+    func loadData() {
+        // 1. Miramos si hay algo guardado en el cajón con nuestra llave
+        if let savedData = UserDefaults.standard.data(forKey: saveKey) {
+            // 2. Intentamos desempaquetar ese JSON y convertirlo de nuevo a [MaintenanceRecord]
+            if let decodedRecords = try? JSONDecoder().decode([MaintenanceRecord].self, from: savedData) {
+                // 3. Si todo va bien, se lo asignamos a nuestra lista
+                maintenanceHistory = decodedRecords
+                return
+            }
+        }
+        
+        // Si falla o no hay datos (ej. la primera vez que se abre la app), la lista empieza vacía
+        maintenanceHistory = []
     }
 }

@@ -1,8 +1,11 @@
 import SwiftUI
+import LocalAuthentication // Para poder usar FaceID al arrancar
 
 struct SplashView: View {
-    // Binding nos permite modificar la variable que vive en ContentView
     @Binding var currentScreen: AppState
+    
+    @AppStorage("isLoggedIn") var isLoggedIn = false
+    @AppStorage("useFaceID") var useFaceID = false // Saber si activó FaceID
     
     // Variables para la animación inicial
     @State private var size = 0.5
@@ -35,12 +38,48 @@ struct SplashView: View {
                 self.opacity = 1.0
             }
             
-            // 2. Esperamos 2.5 segundos y cambiamos la pantalla al Login
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                withAnimation {
-                    currentScreen = .login
+                checkLoginStatus() // <- CAMBIADO: Llamamos a la nueva lógica
+            }
+        }
+    }
+    
+    // ==========================================
+    //        NUEVAS FUNCIONES DE ARRANQUE
+    // ==========================================
+
+    func checkLoginStatus() {
+        if isLoggedIn {
+            if useFaceID {
+                // Si está logueado y activó FaceID, lo pedimos
+                authenticateWithFaceID()
+            } else {
+                // Si está logueado pero NO activó FaceID, entra directo
+                withAnimation { currentScreen = .dashboard }
+            }
+        } else {
+            // No está logueado
+            withAnimation { currentScreen = .login }
+        }
+    }
+
+    func authenticateWithFaceID() {
+        let context = LAContext()
+        var error: NSError?
+        
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Inicia sesión en tu garaje") { success, _ in
+                DispatchQueue.main.async {
+                    if success {
+                        withAnimation { currentScreen = .dashboard }
+                    } else {
+                        // Si cancela o no reconoce la cara, le mandamos a poner la contraseña
+                        withAnimation { currentScreen = .login }
+                    }
                 }
             }
+        } else {
+            withAnimation { currentScreen = .dashboard }
         }
     }
 }

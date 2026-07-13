@@ -6,10 +6,23 @@
 //
 
 import SwiftUI
+import LocalAuthentication
 
 struct LoginView: View {
-    // Recibe el "mando" para cambiar de pantalla
     @Binding var currentScreen: AppState
+    
+    // Variables guardadas en el disco duro
+    @AppStorage("savedEmail") var savedEmail = ""
+    @AppStorage("savedPassword") var savedPassword = ""
+    @AppStorage("isLoggedIn") var isLoggedIn = false
+    @AppStorage("useFaceID") var useFaceID = false
+    
+    @State private var emailInput = ""
+    @State private var passwordInput = ""
+    
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var showFaceIDPrompt = false // Para preguntar por FaceID
     
     var body: some View {
         NavigationStack {
@@ -29,34 +42,65 @@ struct LoginView: View {
                 Text("Tu Taller Virtual en el bolsillo")
                     .font(.subheadline)
                     .foregroundColor(.gray)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 20)
                 
-                // Botones
                 VStack(spacing: 15) {
-                    LoginButtonView(icon: "applelogo", title: "Continuar con Apple", backgroundColor: .black, textColor: .white) {
-                        currentScreen = .dashboard // Cambia al panel principal
+                    CustomTextField(icon: "envelope.fill", placeholder: "Correo electrónico", text: $emailInput)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                    
+                    CustomSecureField(icon: "lock.fill", placeholder: "Contraseña", text: $passwordInput)
+                    
+                    // Botón de Iniciar Sesión Normal
+                    Button(action: loginWithEmail) {
+                        Text("Iniciar Sesión")
+                            .fontWeight(.bold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                     }
                     
-                    LoginButtonView(icon: "network", title: "Continuar con Google", backgroundColor: .white, textColor: .black, hasBorder: true) {
-                        currentScreen = .dashboard // Cambia al panel principal
-                    }
-                    
-                    // Va a la ventana de registro
-                    NavigationLink(destination: RegisterView(currentScreen: $currentScreen)) {
-                        LoginButtonView(icon: "envelope.fill", title: "Continuar con Email", backgroundColor: .blue, textColor: .white) {
-                            // Vacío porque NavigationLink ya hace la navegación
+                    // Botón Face ID (Solo aparece si ya hay un usuario registrado en el móvil)
+                    if !savedEmail.isEmpty {
+                        Button(action: authenticateWithBiometrics) {
+                            HStack {
+                                Image(systemName: "faceid")
+                                    .font(.title2)
+                                Text("Entrar con Face ID")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.black)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
                     }
+                }
+                .padding(.horizontal, 20)
+                
+                VStack(spacing: 15) {
+                    HStack {
+                        VStack { Divider() }
+                        Text("O continúa con")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                        VStack { Divider() }
+                    }
+                    .padding(.vertical, 5)
                     
-                    LoginButtonView(icon: "phone.fill", title: "Continuar con Nº de Teléfono", backgroundColor: .green, textColor: .white) {
-                        currentScreen = .dashboard // Cambia al panel principal
+                    HStack(spacing: 25) {
+                        SocialLoginButton(icon: "applelogo", color: .primary) { simulateSocialLogin(provider: "Apple") }
+                        SocialLoginTextButton(text: "G", color: .red) { simulateSocialLogin(provider: "Google") }
+                        SocialLoginButton(icon: "phone.fill", color: .green) { simulateSocialLogin(provider: "Teléfono") }
                     }
                 }
                 .padding(.horizontal, 20)
                 
                 Spacer()
                 
-                // Va a la ventana de registro
                 NavigationLink(destination: RegisterView(currentScreen: $currentScreen)) {
                     Text("¿No tienes cuenta? **Regístrate**")
                         .foregroundColor(.blue)
@@ -64,40 +108,114 @@ struct LoginView: View {
                 }
             }
             .navigationBarHidden(true)
+            .alert("Error de Inicio", isPresented: $showError) {
+                Button("Entendido", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            // <- NUEVA ALERTA: Pregunta por Face ID tras login exitoso
+            .alert("¿Activar Face ID?", isPresented: $showFaceIDPrompt) {
+                Button("Sí, activar") {
+                    useFaceID = true
+                    currentScreen = .dashboard
+                }
+                Button("No, gracias", role: .cancel) {
+                    useFaceID = false
+                    currentScreen = .dashboard
+                }
+            } message: {
+                Text("Has iniciado sesión correctamente. ¿Quieres usar Face ID para entrar automáticamente la próxima vez?")
+            }
+        }
+    }
+    
+    // ==========================================
+    //        LÓGICA DE INICIO DE SESIÓN
+    // ==========================================
+    
+    func loginWithEmail() {
+        if emailInput == savedEmail && passwordInput == savedPassword && !savedEmail.isEmpty {
+            isLoggedIn = true
+            // En vez de ir directo al dashboard, preguntamos por FaceID si no lo tiene activo
+            if !useFaceID {
+                showFaceIDPrompt = true
+            } else {
+                currentScreen = .dashboard
+            }
+        } else {
+            errorMessage = "Correo o contraseña incorrectos."
+            showError = true
+        }
+    }
+    
+    func simulateSocialLogin(provider: String) {
+        savedEmail = "usuario@\(provider.lowercased()).com"
+        savedPassword = "social_password_mock"
+        isLoggedIn = true
+        if !useFaceID {
+            showFaceIDPrompt = true
+        } else {
+            currentScreen = .dashboard
+        }
+    }
+    
+    func authenticateWithBiometrics() {
+        let context = LAContext()
+        var error: NSError?
+        
+        // Verificamos si el iPhone tiene FaceID habilitado
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            let reason = "Inicia sesión de forma segura en tu garaje."
+            
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, authenticationError in
+                DispatchQueue.main.async {
+                    if success {
+                        isLoggedIn = true
+                        currentScreen = .dashboard
+                    } else {
+                        errorMessage = "No se pudo reconocer tu rostro/huella."
+                        showError = true
+                    }
+                }
+            }
+        } else {
+            errorMessage = "Face ID no está configurado en este dispositivo."
+            showError = true
         }
     }
 }
 
-// Subvista del botón (Acepta acciones)
-struct LoginButtonView: View {
+struct SocialLoginButton: View {
     let icon: String
-    let title: String
-    let backgroundColor: Color
-    let textColor: Color
-    var hasBorder: Bool = false
+    let color: Color
     var action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title3)
-                Text(title)
-                    .fontWeight(.semibold)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(backgroundColor)
-            .foregroundColor(textColor)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(hasBorder ? Color.gray.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
+            Image(systemName: icon)
+                .font(.title2)
+                .frame(width: 55, height: 55)
+                .background(Color(UIColor.secondarySystemBackground))
+                .foregroundColor(color)
+                .clipShape(Circle())
         }
     }
 }
 
-#Preview {
-    LoginView(currentScreen: .constant(.login))
+struct SocialLoginTextButton: View {
+    let text: String
+    let color: Color
+    var action: () -> Void
+    
+    var body: some View {
+        Button(action: action) { 
+            Text(text)
+                .font(.title2)
+                .fontWeight(.bold)
+                .frame(width: 55, height: 55)
+                .background(Color(UIColor.secondarySystemBackground))
+                .foregroundColor(color)
+                .clipShape(Circle())
+        }
+    }
 }

@@ -11,6 +11,11 @@ struct RegisterView: View {
     // Recibe el "mando"
     @Binding var currentScreen: AppState
     
+    @AppStorage("savedEmail") var savedEmail = ""
+    @AppStorage("savedPassword") var savedPassword = ""
+    @AppStorage("isLoggedIn") var isLoggedIn = false
+    @AppStorage("useFaceID") var useFaceID = false
+    
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -18,7 +23,7 @@ struct RegisterView: View {
     
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var showSuccess = false
+    @State private var showFaceIDPrompt = false
     
     var body: some View {
         VStack {
@@ -59,13 +64,37 @@ struct RegisterView: View {
             } message: {
                 Text(errorMessage)
             }
-            .alert("¡Registro Exitoso!", isPresented: $showSuccess) {
-                Button("Empezar") {
-                    currentScreen = .dashboard // ¡Cambia al panel principal!
+            .alert("¡Registro Exitoso!", isPresented: $showFaceIDPrompt) {
+                Button("Sí, activar Face ID") {
+                    useFaceID = true
+                    currentScreen = .dashboard
+                }
+                Button("No, gracias", role: .cancel) {
+                    useFaceID = false
+                    currentScreen = .dashboard
                 }
             } message: {
-                Text("Tu cuenta ha sido creada correctamente.")
+                Text("Tu cuenta ha sido creada. ¿Quieres usar Face ID para entrar más rápido la próxima vez?")
             }
+            
+            VStack(spacing: 15) {
+                HStack {
+                    VStack { Divider() }
+                    Text("O regístrate con")
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                    VStack { Divider() }
+                }
+                .padding(.vertical, 5)
+                
+                HStack(spacing: 25) {
+                    SocialLoginButton(icon: "applelogo", color: .primary) { simulateSocialLogin(provider: "Apple") }
+                    SocialLoginTextButton(text: "G", color: .red) { simulateSocialLogin(provider: "Google") }
+                    SocialLoginButton(icon: "phone.fill", color: .green) { simulateSocialLogin(provider: "Teléfono") }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
             
             Spacer()
         }
@@ -87,11 +116,22 @@ struct RegisterView: View {
             showError = true
             return
         }
-        showSuccess = true
+        
+        savedEmail = email
+        savedPassword = password
+        isLoggedIn = true
+        
+        showFaceIDPrompt = true // <- CAMBIADO
+    }
+    
+    func simulateSocialLogin(provider: String) {
+        savedEmail = "usuario@\(provider.lowercased()).com"
+        savedPassword = "social_password_mock"
+        isLoggedIn = true
+        showFaceIDPrompt = true
     }
 }
 
-// Subvistas para los campos de texto
 struct CustomTextField: View {
     let icon: String
     let placeholder: String
