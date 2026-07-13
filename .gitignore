@@ -1,0 +1,15 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcuserdatad/
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Firebase (contiene la API key del proyecto; no debe subirse a un repo público)
+GoogleService-Info.plist
+GoogleService-Info-2.plist

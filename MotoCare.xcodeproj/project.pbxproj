@@ -6,13 +6,33 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FF52882E30054D9600A8BA9B /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = FF52882D30054D9600A8BA9B /* GoogleSignIn */; };
+		FF52883030054D9600A8BA9B /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = FF52882F30054D9600A8BA9B /* GoogleSignInSwift */; };
+		FF53486530054AC400C8D256 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FF53486430054AC400C8D256 /* FirebaseAuth */; };
+		FF53486730054AC400C8D256 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = FF53486630054AC400C8D256 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		FF192675300139F900F3FEFC /* MotoCare.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MotoCare.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		FF52883430054FF800A8BA9B /* Exceptions for "MotoCare" folder in "MotoCare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FF192674300139F900F3FEFC /* MotoCare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		FF192677300139F900F3FEFC /* MotoCare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FF52883430054FF800A8BA9B /* Exceptions for "MotoCare" folder in "MotoCare" target */,
+			);
 			path = MotoCare;
 			sourceTree = "<group>";
 		};
@@ -22,6 +42,10 @@
 		FF192672300139F900F3FEFC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				FF53486530054AC400C8D256 /* FirebaseAuth in Frameworks */,
+				FF53486730054AC400C8D256 /* FirebaseFirestore in Frameworks */,
+				FF52882E30054D9600A8BA9B /* GoogleSignIn in Frameworks */,
+				FF52883030054D9600A8BA9B /* GoogleSignInSwift in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -60,6 +84,12 @@
 				FF192677300139F900F3FEFC /* MotoCare */,
 			);
 			name = MotoCare;
+			packageProductDependencies = (
+				FF53486430054AC400C8D256 /* FirebaseAuth */,
+				FF53486630054AC400C8D256 /* FirebaseFirestore */,
+				FF52882D30054D9600A8BA9B /* GoogleSignIn */,
+				FF52882F30054D9600A8BA9B /* GoogleSignInSwift */,
+			);
 			productName = MotoCare;
 			productReference = FF192675300139F900F3FEFC /* MotoCare.app */;
 			productType = "com.apple.product-type.application";
@@ -89,6 +119,10 @@
 			);
 			mainGroup = FF19266C300139F900F3FEFC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FF53486330054AC400C8D256 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				FF52882C30054D9600A8BA9B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FF192676300139F900F3FEFC /* Products */;
 			projectDirPath = "";
@@ -241,10 +275,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = MotoCare/MotoCare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MotoCare/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -275,10 +312,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = MotoCare/MotoCare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MotoCare/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -322,6 +362,48 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FF52882C30054D9600A8BA9B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.2.0;
+			};
+		};
+		FF53486330054AC400C8D256 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.16.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FF52882D30054D9600A8BA9B /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF52882C30054D9600A8BA9B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		FF52882F30054D9600A8BA9B /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF52882C30054D9600A8BA9B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+		FF53486430054AC400C8D256 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF53486330054AC400C8D256 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		FF53486630054AC400C8D256 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF53486330054AC400C8D256 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FF19266D300139F900F3FEFC /* Project object */;
 	validationLevel = 1;
