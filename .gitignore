@@ -13,3 +13,8 @@ build/
 # Firebase (contiene la API key del proyecto; no debe subirse a un repo público)
 GoogleService-Info.plist
 GoogleService-Info-2.plist
+
+# Firebase (tests de reglas con el emulador)
+firebase/node_modules/
+*-debug.log
+.firebase/

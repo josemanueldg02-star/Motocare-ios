@@ -8,11 +8,35 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAuth
+import FirebaseAppCheck
 import GoogleSignIn
+
+/// Elige el proveedor de App Check según el dispositivo:
+/// App Attest en iOS 14+ (hardware seguro) y DeviceCheck como respaldo.
+/// Solo se usa en builds de release; en DEBUG usamos el proveedor de depuración.
+final class MotoCareAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        if #available(iOS 14.0, *) {
+            return AppAttestProvider(app: app)
+        }
+        return DeviceCheckProvider(app: app)
+    }
+}
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                       didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // App Check DEBE configurarse ANTES de FirebaseApp.configure().
+        // Protege el backend (Auth, Firestore) para que solo responda a esta app
+        // genuina y no a clientes falsos, scripts o abuso del envío de SMS.
+        #if DEBUG
+        // En simulador/desarrollo imprime un "debug token" en la consola que hay que
+        // registrar en: Firebase Console → App Check → tu app → Manage debug tokens.
+        AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
+        #else
+        AppCheck.setAppCheckProviderFactory(MotoCareAppCheckProviderFactory())
+        #endif
+
         FirebaseApp.configure()
         application.registerForRemoteNotifications()
         return true

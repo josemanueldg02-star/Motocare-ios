@@ -164,7 +164,11 @@ enum AuthService {
 
     private static func spanishMessage(for error: Error) -> String {
         let nsError = error as NSError
+        #if DEBUG
+        // Solo en builds de desarrollo: en release, el userInfo de Firebase puede
+        // contener datos sensibles que no deben quedar en la consola del dispositivo.
         print("🔥 AuthService error → domain: \(nsError.domain), code: \(nsError.code), userInfo: \(nsError.userInfo)")
+        #endif
 
         guard let code = AuthErrorCode(rawValue: nsError.code) else {
             return "No se pudo completar la operación. Inténtalo de nuevo."
