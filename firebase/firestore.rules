@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para MotoCare.
+//
+// Modelo de datos actual (ver AuthService.swift):
+//   users/{uid}  -> perfil del usuario. El id del documento ES el uid de Firebase Auth.
+//
+// Principio: un usuario autenticado solo puede leer y escribir SU PROPIO documento.
+// Cualquier otra colección o ruta queda denegada por defecto.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Perfiles de usuario ----
+    match /users/{userId} {
+      allow read:   if isOwner(userId);
+      allow create: if isOwner(userId) && isValidNewUser(userId);
+      allow update: if isOwner(userId) && isValidUserUpdate();
+      allow delete: if isOwner(userId);
+    }
+
+    // ---- Denegar todo lo demás explícitamente (documentación + defensa en profundidad) ----
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---- Funciones auxiliares ----
+
+    // El solicitante está autenticado y su uid coincide con el documento.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Valida la forma de un documento de usuario recién creado.
+    // Evita que un cliente manipulado escriba basura o se asigne un uid ajeno.
+    function isValidNewUser(userId) {
+      let d = request.resource.data;
+      return d.uid == userId
+        && d.name is string  && d.name.size() <= 100
+        && d.email is string && d.email.size() <= 320
+        && d.createdAt is timestamp
+        && (!('phoneNumber' in d) || d.phoneNumber == null || d.phoneNumber is string);
+    }
+
+    // En una actualización, el uid es inmutable y no se puede suplantar.
+    function isValidUserUpdate() {
+      let d = request.resource.data;
+      return d.uid == resource.data.uid
+        && d.name is string  && d.name.size() <= 100
+        && d.email is string && d.email.size() <= 320;
+    }
+  }
+}
