@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DC28C1DD3098A55C005B8147 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = DC28C1DC3098A55C005B8147 /* FirebaseAppCheck */; };
 		FF52882E30054D9600A8BA9B /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = FF52882D30054D9600A8BA9B /* GoogleSignIn */; };
 		FF52883030054D9600A8BA9B /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = FF52882F30054D9600A8BA9B /* GoogleSignInSwift */; };
 		FF53486530054AC400C8D256 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = FF53486430054AC400C8D256 /* FirebaseAuth */; };
@@ -45,16 +46,25 @@
 				FF53486530054AC400C8D256 /* FirebaseAuth in Frameworks */,
 				FF53486730054AC400C8D256 /* FirebaseFirestore in Frameworks */,
 				FF52882E30054D9600A8BA9B /* GoogleSignIn in Frameworks */,
+				DC28C1DD3098A55C005B8147 /* FirebaseAppCheck in Frameworks */,
 				FF52883030054D9600A8BA9B /* GoogleSignInSwift in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DC28C1DB3098A55C005B8147 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FF19266C300139F900F3FEFC = {
 			isa = PBXGroup;
 			children = (
 				FF192677300139F900F3FEFC /* MotoCare */,
+				DC28C1DB3098A55C005B8147 /* Frameworks */,
 				FF192676300139F900F3FEFC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -89,6 +99,7 @@
 				FF53486630054AC400C8D256 /* FirebaseFirestore */,
 				FF52882D30054D9600A8BA9B /* GoogleSignIn */,
 				FF52882F30054D9600A8BA9B /* GoogleSignInSwift */,
+				DC28C1DC3098A55C005B8147 /* FirebaseAppCheck */,
 			);
 			productName = MotoCare;
 			productReference = FF192675300139F900F3FEFC /* MotoCare.app */;
@@ -102,7 +113,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2700;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					FF192674300139F900F3FEFC = {
 						CreatedOnToolsVersion = 27.0;
@@ -185,6 +196,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -208,6 +220,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -248,6 +261,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -264,6 +278,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -278,7 +293,6 @@
 				CODE_SIGN_ENTITLEMENTS = MotoCare/MotoCare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotoCare/Info.plist;
@@ -315,7 +329,6 @@
 				CODE_SIGN_ENTITLEMENTS = MotoCare/MotoCare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = F4VMM9NV48;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotoCare/Info.plist;
@@ -383,6 +396,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DC28C1DC3098A55C005B8147 /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF53486330054AC400C8D256 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
+		};
 		FF52882D30054D9600A8BA9B /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FF52882C30054D9600A8BA9B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;

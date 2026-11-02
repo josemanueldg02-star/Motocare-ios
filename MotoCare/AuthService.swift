@@ -49,7 +49,7 @@ enum AuthService {
             try? await changeRequest.commitChanges()
 
             let user = AppUser(uid: result.user.uid, name: name, email: cleanEmail, phoneNumber: nil, createdAt: Date())
-            try await db.collection("users").document(user.uid).setData(from: user)
+            try db.collection("users").document(user.uid).setData(from: user)
             return user
         } catch {
             throw AuthServiceError(errorDescription: spanishMessage(for: error))
@@ -158,7 +158,7 @@ enum AuthService {
         }
         let name = defaultName ?? user.displayName ?? ""
         let fallback = AppUser(uid: user.uid, name: name, email: user.email ?? "", phoneNumber: user.phoneNumber, createdAt: Date())
-        try await ref.setData(from: fallback)
+        try ref.setData(from: fallback)
         return fallback
     }
 

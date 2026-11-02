@@ -77,7 +77,21 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
     }
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        SocialAuthHelpers.rootViewController?.view.window ?? ASPresentationAnchor()
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+
+        // Lo normal: reutilizar una ventana que YA existe (sin crear ninguna).
+        let windows = scenes.flatMap { $0.windows }
+        if let window = windows.first(where: { $0.isKeyWindow }) ?? windows.first {
+            return window
+        }
+
+        // Respaldo: crear una ventana a partir de una escena.
+        // En iOS 26, UIWindow() e init(frame:) están deprecados; solo vale init(windowScene:).
+        guard let scene = scenes.first else {
+            // Inalcanzable durante un login: siempre hay una escena activa con la UI visible.
+            fatalError("No hay UIWindowScene disponible para presentar el login de Apple.")
+        }
+        return UIWindow(windowScene: scene)
     }
 
     // MARK: - Nonce
