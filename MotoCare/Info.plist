@@ -29,10 +29,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MotoCare usa tu ubicación durante el viaje para medir tu velocidad y, en caso de accidente, enviar tu posición a tus contactos de emergencia.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>MotoCare necesita la ubicación en segundo plano para seguir vigilando tu viaje y detectar un posible accidente aunque la app no esté abierta.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
