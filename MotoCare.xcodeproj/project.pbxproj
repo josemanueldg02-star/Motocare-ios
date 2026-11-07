@@ -296,6 +296,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotoCare/Info.plist;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "MotoCare usa Face ID para que entres en tu cuenta de forma rápida y segura.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "MotoCare necesita la ubicación en segundo plano para seguir vigilando tu viaje y detectar un posible accidente aunque la app no esté abierta.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "MotoCare usa tu ubicación durante el viaje para medir tu velocidad y, en caso de accidente, enviar tu posición a tus contactos de emergencia.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +335,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MotoCare/Info.plist;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "MotoCare usa Face ID para que entres en tu cuenta de forma rápida y segura.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "MotoCare necesita la ubicación en segundo plano para seguir vigilando tu viaje y detectar un posible accidente aunque la app no esté abierta.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "MotoCare usa tu ubicación durante el viaje para medir tu velocidad y, en caso de accidente, enviar tu posición a tus contactos de emergencia.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
