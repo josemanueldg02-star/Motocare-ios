@@ -16,6 +16,12 @@ struct MainTabView: View {
                     Text("Inicio")
                 }
 
+            RideView()
+                .tabItem {
+                    Image(systemName: "gauge.high")
+                    Text("Conducir")
+                }
+
             GarageView()
                 .tabItem {
                     Image(systemName: "wrench.and.screwdriver.fill")
