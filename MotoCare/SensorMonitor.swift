@@ -5,7 +5,7 @@
 //  Lee los sensores de movimiento (acelerómetro + giroscopio, vía Core Motion)
 //  durante el modo viaje: publica valores en vivo y picos para la pantalla, y
 //  pasa cada muestra al RideRecorder para grabar el viaje en CSV (MVP paso 2).
-//  Con estos datos reales fijaremos los umbrales del detector de accidentes.
+//  Desde el paso 3, cada muestra pasa también por el CrashDetector.
 //
 //  No necesita permiso del usuario: a diferencia del GPS, el acelerómetro y el
 //  giroscopio no están protegidos por privacidad en iOS.
@@ -42,10 +42,24 @@ final class SensorMonitor: ObservableObject {
     @Published private(set) var markerCount = 0
     @Published private(set) var isRunning = false
 
+    // MARK: Detector de accidentes (paso 3)
+    @Published private(set) var detectorPhase: CrashDetector.Phase = .monitoring
+    /// Posible accidente pendiente de respuesta. Al ponerlo a nil ("Estoy bien"), el detector vuelve a vigilar.
+    @Published var detection: CrashDetector.Detection? {
+        didSet {
+            if detection == nil { resumeMonitoringAfterDetection() }
+        }
+    }
+    /// Modo prueba en casa: el detector ignora la velocidad, para poder probarlo sin moto.
+    @Published var homeTestMode = false {
+        didSet { detector.config.ignoreSpeed = homeTestMode }
+    }
+
     /// Última velocidad del GPS en km/h (la actualiza RideSessionManager); va en cada fila del CSV.
     var latestSpeedKmh: Double = 0
 
     private let motionManager = CMMotionManager()
+    private var detector = CrashDetector()
     private var recorder: RideRecorder?
     private var pendingLines: [String] = []
     private var firstTimestamp: TimeInterval?
@@ -115,7 +129,16 @@ final class SensorMonitor: ObservableObject {
         pendingMarker = 0
         latestSpeedKmh = 0
         markerCount = 0
+        detector.reset()        // conserva la configuración (p. ej. el modo prueba)
+        detection = nil
+        detectorPhase = detector.phase
         publish()
+    }
+
+    /// Tras responder "Estoy bien", el detector vuelve a vigilar.
+    private func resumeMonitoringAfterDetection() {
+        if detector.phase == .detected { detector.acknowledge() }
+        detectorPhase = detector.phase
     }
 
     private func ingest(_ motion: CMDeviceMotion) {
@@ -142,17 +165,25 @@ final class SensorMonitor: ObservableObject {
         lastRoll = attitude.roll * Self.degreesPerRadian
         lastPitch = attitude.pitch * Self.degreesPerRadian
 
+        // Detector de accidentes: misma lógica que en el Mac (Tools/DetectorReplay).
+        if let found = detector.process(t: t, speedKmh: latestSpeedKmh,
+                                        accelerationG: accMag,
+                                        rotationDegPerSec: rotMag * Self.degreesPerRadian) {
+            detection = found
+        }
+        if detector.phase != detectorPhase { detectorPhase = detector.phase }
+
         if recorder != nil {
             // String(format:) usa siempre punto decimal; formatted() usaría la coma
             // del español y rompería el CSV.
             pendingLines.append(String(
-                format: "%.3f,%.1f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%ld",
+                format: "%.3f,%.1f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%ld,%ld",
                 t, latestSpeedKmh,
                 a.x, a.y, a.z, accMag,
                 g.x, g.y, g.z,
                 r.x, r.y, r.z, rotMag,
                 lastRoll, lastPitch, attitude.yaw * Self.degreesPerRadian,
-                pendingMarker))
+                pendingMarker, detector.phase.rawValue))
             pendingMarker = 0
             if pendingLines.count >= Self.samplesPerFlush { flushToRecorder() }
         }

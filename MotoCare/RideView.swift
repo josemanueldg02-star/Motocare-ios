@@ -178,7 +178,21 @@ private struct SensorPanel: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                Toggle(isOn: $sensors.homeTestMode) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Modo prueba en casa")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Ignora la velocidad. Inicia el viaje, deja caer el móvil en la cama y no lo toques unos 12 s.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(.orange)
+
                 if isRiding {
+                    detectorStatus
+                        .font(.subheadline.weight(.semibold))
+
                     recordingStatus
 
                     Button {
@@ -201,6 +215,31 @@ private struct SensorPanel: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(24)
         .opacity(sensors.isRunning || !sensors.isAvailable ? 1 : 0.6)
+        // Posible accidente → pantalla completa. "Estoy bien" la cierra y el detector vuelve a vigilar.
+        .fullScreenCover(item: $sensors.detection) { detection in
+            CrashAlertView(detection: detection) {
+                sensors.detection = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detectorStatus: some View {
+        switch sensors.detectorPhase {
+        case .monitoring:
+            Label(sensors.homeTestMode ? "Detector vigilando (modo prueba en casa)" : "Detector vigilando",
+                  systemImage: "shield.checkered")
+                .foregroundStyle(.green)
+        case .impact:
+            Label("Impacto detectado · comprobando si te detienes…", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        case .observing:
+            Label("Detenido · comprobando si te mueves…", systemImage: "hourglass")
+                .foregroundStyle(.orange)
+        case .detected:
+            Label("Posible accidente detectado", systemImage: "exclamationmark.octagon.fill")
+                .foregroundStyle(.red)
+        }
     }
 
     @ViewBuilder

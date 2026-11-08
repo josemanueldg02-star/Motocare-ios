@@ -12,7 +12,8 @@ import Foundation
 
 final class RideRecorder {
 
-    static let header = "t_s,speed_kmh,acc_x_g,acc_y_g,acc_z_g,acc_mag_g,grav_x_g,grav_y_g,grav_z_g,rot_x_rads,rot_y_rads,rot_z_rads,rot_mag_rads,roll_deg,pitch_deg,yaw_deg,marker"
+    /// `det_state`: fase del detector de accidentes (0 vigilando, 1 impacto, 2 observando, 3 detectado).
+    static let header = "t_s,speed_kmh,acc_x_g,acc_y_g,acc_z_g,acc_mag_g,grav_x_g,grav_y_g,grav_z_g,rot_x_rads,rot_y_rads,rot_z_rads,rot_mag_rads,roll_deg,pitch_deg,yaw_deg,marker,det_state"
 
     let fileURL: URL
     private var handle: FileHandle?
