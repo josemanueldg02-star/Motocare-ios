@@ -3,9 +3,10 @@
 //  MotoCare
 //
 //  "Modo viaje": pide permiso de ubicación, arranca/para el seguimiento GPS y
-//  publica la velocidad actual en km/h. Es la base del futuro detector de
-//  accidentes (MVP paso 1: de momento solo mide la velocidad en vivo, también
-//  con la app en segundo plano).
+//  publica la velocidad actual en km/h, también con la app en segundo plano
+//  (MVP paso 1). Desde el paso 2 arranca además los sensores de movimiento y
+//  graba cada viaje en CSV, la base para fijar los umbrales del detector de
+//  accidentes.
 //
 
 import Foundation
@@ -20,8 +21,16 @@ final class RideSessionManager: NSObject, ObservableObject {
     @Published private(set) var topSpeedKmh: Double = 0
     @Published private(set) var isRiding = false
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// CSV del último viaje terminado, para compartirlo. nil mientras se rueda.
+    @Published private(set) var lastRecordingURL: URL?
+    /// true si no se pudo crear el archivo de grabación del viaje actual.
+    @Published private(set) var recordingFailed = false
+
+    /// Sensores de movimiento (acelerómetro + giroscopio) del viaje.
+    let sensors = SensorMonitor()
 
     private let locationManager = CLLocationManager()
+    private var recorder: RideRecorder?
 
     override init() {
         super.init()
@@ -52,6 +61,8 @@ final class RideSessionManager: NSObject, ObservableObject {
         }
         isRiding = true
         topSpeedKmh = 0
+        lastRecordingURL = nil
+        startSensors()
         beginUpdatesIfPossible()
     }
 
@@ -60,6 +71,24 @@ final class RideSessionManager: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
         locationManager.allowsBackgroundLocationUpdates = false
         speedKmh = 0
+        // Primero los sensores (vuelcan sus últimas muestras) y después se cierra el CSV.
+        sensors.stop()
+        lastRecordingURL = recorder?.finish()
+        recorder = nil
+    }
+
+    /// Arranca los sensores y la grabación. En el simulador no hay sensores: no se graba nada.
+    private func startSensors() {
+        guard sensors.isAvailable else { return }
+        do {
+            recorder = try RideRecorder()
+            recordingFailed = false
+        } catch {
+            // Sin archivo seguimos mostrando los sensores; la pantalla avisa de que no se graba.
+            recorder = nil
+            recordingFailed = true
+        }
+        sensors.start(recorder: recorder)
     }
 
     private func beginUpdatesIfPossible() {
@@ -91,6 +120,7 @@ extension RideSessionManager: CLLocationManagerDelegate {
         let kmh = max(0, location.speed) * 3.6
         speedKmh = kmh
         if kmh > topSpeedKmh { topSpeedKmh = kmh }
+        sensors.latestSpeedKmh = kmh
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
