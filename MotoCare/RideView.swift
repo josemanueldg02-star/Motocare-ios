@@ -2,8 +2,9 @@
 //  RideView.swift
 //  MotoCare
 //
-//  Pantalla "Conducir": velocímetro en vivo y botón para iniciar/finalizar el
-//  modo viaje. Botón grande a propósito: tiene que poder pulsarse con guantes.
+//  Pantalla "Conducir": velocímetro en vivo, panel de sensores (MVP paso 2) y
+//  botón para iniciar/finalizar el modo viaje. El botón es grande y va fijo
+//  abajo a propósito: tiene que poder pulsarse con guantes.
 //
 
 import SwiftUI
@@ -18,18 +19,28 @@ struct RideView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
+            ScrollView {
+                VStack(spacing: 20) {
+                    speedometer
 
-                speedometer
+                    SensorPanel(sensors: ride.sensors,
+                                isRiding: ride.isRiding,
+                                recordingFailed: ride.recordingFailed)
 
-                Spacer()
+                    if !ride.isRiding, let url = ride.lastRecordingURL {
+                        shareRecording(url)
+                    }
 
-                statusBanner
-
-                rideButton
+                    statusBanner
+                }
+                .padding()
             }
-            .padding()
+            .safeAreaInset(edge: .bottom) {
+                rideButton
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
             .navigationTitle("Conducir")
             .onAppear {
                 if ride.authorizationStatus == .notDetermined {
@@ -99,6 +110,22 @@ struct RideView: View {
         }
     }
 
+    /// Botón para enviar el CSV del último viaje (AirDrop al Mac, Archivos, etc.).
+    private func shareRecording(_ url: URL) -> some View {
+        VStack(spacing: 6) {
+            ShareLink(item: url) {
+                Label("Compartir grabación", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+
+            Text(url.lastPathComponent)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var rideButton: some View {
         Button {
             if ride.isRiding { ride.stopRide() } else { ride.startRide() }
@@ -112,6 +139,105 @@ struct RideView: View {
                 .cornerRadius(18)
         }
         .disabled(locationBlocked)
+    }
+}
+
+// MARK: - Panel de sensores
+
+/// Acelerómetro y giroscopio en vivo, picos del viaje y estado de la grabación.
+/// Observa SensorMonitor directamente: se refresca a 10 Hz sin redibujar toda la pantalla.
+private struct SensorPanel: View {
+    @ObservedObject var sensors: SensorMonitor
+    let isRiding: Bool
+    let recordingFailed: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Sensores", systemImage: "waveform.path.ecg")
+                .font(.headline)
+
+            if !sensors.isAvailable {
+                Text("Sensores de movimiento no disponibles en el simulador. Pruébalo en el iPhone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 12) {
+                    MetricTile(title: "Aceleración",
+                               value: Text("\(sensors.accelerationG, format: .number.precision(.fractionLength(2))) g"))
+                    MetricTile(title: "Giro",
+                               value: Text("\(sensors.rotationDegPerSec, format: .number.precision(.fractionLength(0))) °/s"))
+                }
+                HStack(spacing: 12) {
+                    MetricTile(title: "Inclinación",
+                               value: Text("\(sensors.rollDeg, format: .number.precision(.fractionLength(0)))°"))
+                    MetricTile(title: "Cabeceo",
+                               value: Text("\(sensors.pitchDeg, format: .number.precision(.fractionLength(0)))°"))
+                }
+
+                Text("Pico del viaje: \(sensors.peakAccelerationG, format: .number.precision(.fractionLength(2))) g · \(sensors.peakRotationDegPerSec, format: .number.precision(.fractionLength(0))) °/s")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if isRiding {
+                    recordingStatus
+
+                    Button {
+                        sensors.addMarker()
+                    } label: {
+                        Label("Marcar evento (\(sensors.markerCount))", systemImage: "flag.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Text("Usa «Marcar» solo con la moto parada, justo antes de cada prueba.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(24)
+        .opacity(sensors.isRunning || !sensors.isAvailable ? 1 : 0.6)
+    }
+
+    @ViewBuilder
+    private var recordingStatus: some View {
+        if recordingFailed {
+            Label("No se pudo grabar este viaje", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline)
+                .foregroundStyle(.orange)
+        } else {
+            Label {
+                Text("Grabando · \(Duration.seconds(sensors.elapsedSeconds).formatted(.time(pattern: .hourMinuteSecond))) · \(sensors.sampleCount) muestras")
+            } icon: {
+                Image(systemName: "record.circle")
+                    .foregroundStyle(.red)
+            }
+            .font(.subheadline.monospacedDigit())
+        }
+    }
+}
+
+/// Una casilla del panel: título pequeño y valor grande.
+private struct MetricTile: View {
+    let title: LocalizedStringKey
+    let value: Text
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            value
+                .font(.title3.weight(.semibold).monospacedDigit())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(14)
     }
 }
 
